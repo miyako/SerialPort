@@ -84,7 +84,10 @@ returns `request_not_found`. Disconnect events can precede the close response.
 ## Hard bounds and cleanup
 
 * Frame: 65536 bytes excluding LF. Oversized frame returns `frame_limit`, closes
-  all ports and exits 2. Partial frame at EOF returns `invalid_frame`.
+  all ports and exits 2. Partial frame at EOF returns `invalid_frame`, including
+  Windows broken-pipe EOF reported by either PeekNamedPipe or ReadFile.
+  Complete frames already received retain their responses before the terminal
+  frame error; queued stdout drains before process exit.
 * Decoded write: 32768 bytes; only canonical padded RFC 4648 base64 accepted.
   Empty base64 is valid. Invalid/oversized writes return `invalid_request`.
 * Connections: 16 (`port_limit`).

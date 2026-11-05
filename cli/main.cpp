@@ -329,6 +329,12 @@ class Server {
         } catch (const asio::system_error& e) { reply(id, error_value("serial_error", e.what()), false); }
           catch (const std::exception& e) { reply(id, error_value("invalid_request", e.what()), false); }
     }
+    void input_eof(bool incomplete) {
+        asio::post(io, [this, incomplete] {
+            if (incomplete) reply("", error_value("invalid_frame", "EOF before LF"), false);
+            stop();
+        });
+    }
     void input_loop() {
         std::string frame;
         std::array<char, 4096> buffer;
@@ -338,12 +344,12 @@ class Server {
             DWORD available = 0;
             auto handle = GetStdHandle(STD_INPUT_HANDLE);
             if (!PeekNamedPipe(handle, nullptr, 0, nullptr, &available, nullptr)) {
-                asio::post(io, [this] { stop(); }); return;
+                input_eof(!frame.empty()); return;
             }
             if (!available) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }
             DWORD read = 0;
             if (!ReadFile(handle, buffer.data(), DWORD(std::min<size_t>(available, buffer.size())), &read, nullptr)) {
-                asio::post(io, [this] { stop(); }); return;
+                input_eof(!frame.empty()); return;
             }
             count = int(read);
 #else
@@ -355,10 +361,7 @@ class Server {
             if (count < 0 && (errno == EINTR || errno == EAGAIN)) continue;
 #endif
             if (count <= 0) {
-                asio::post(io, [this, incomplete = !frame.empty()] {
-                    if (incomplete) reply("", error_value("invalid_frame", "EOF before LF"), false);
-                    stop();
-                }); return;
+                input_eof(!frame.empty()); return;
             }
             for (int i = 0; i < count && !stopping; ++i) {
                 if (buffer[i] == '\n') {

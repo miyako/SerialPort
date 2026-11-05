@@ -37,6 +37,7 @@ class Session:
                 self.lines.put(json.loads(line))
             except Exception as error:
                 self.lines.put(error)
+        self.lines.put(None)
 
     def send(self, op, **fields):
         self.seq += 1
@@ -55,6 +56,8 @@ class Session:
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             value = self.lines.get(timeout=max(.01, end - time.monotonic()))
+            if value is None:
+                raise AssertionError("helper closed stdout before expected response/event")
             if isinstance(value, Exception):
                 raise value
             if predicate(value):
@@ -169,6 +172,20 @@ class PortableTests(unittest.TestCase):
         s.proc.stdin.close()
         self.assertEqual(s.response("")["error"]["code"], "invalid_frame")
         self.assertEqual(s.proc.wait(timeout=5), 0)
+
+    def test_partial_eof_preserves_queued_responses(self):
+        for suffix in [b"{", b'{"protocol":1}', b"\xe4\xb8"]:
+            with self.subTest(suffix=suffix):
+                s = Session(self)
+                requests = [dict(protocol=1, id=str(n), op="close", connection="missing")
+                            for n in range(128)]
+                s.raw(b"".join(json.dumps(r).encode() + b"\n" for r in requests) + suffix)
+                s.proc.stdin.close()
+                for request in requests:
+                    response = s.response(request["id"])
+                    self.assertEqual(response["error"]["code"], "connection_not_found")
+                self.assertEqual(s.response("")["error"]["code"], "invalid_frame")
+                self.assertEqual(s.proc.wait(timeout=5), 0)
 
     @unittest.skipUnless(os.name == "posix", "POSIX parent termination signal")
     def test_termination(self):
@@ -382,13 +399,25 @@ class PTYTests(PortableTests):
         master, connection = self.port(s)
         os.set_blocking(master, False)
         end = time.monotonic() + 20
-        while s.proc.poll() is None and time.monotonic() < end:
+        result = None
+        while result is None and time.monotonic() < end:
             try:
-                os.write(master, bytes(range(256)) * 16)
+                written = os.write(master, bytes(range(256)) * 16)
             except BlockingIOError:
-                pass
-            time.sleep(.002)
-        result = s.until(lambda r: r.get("event") == "session_limit")
+                import select
+                self.assertTrue(select.select([], [master], [], min(5, max(.01, end - time.monotonic())))[1])
+                continue
+            received = 0
+            while received < written:
+                event = s.until(lambda r: r.get("event") == "session_limit"
+                                or (r.get("event") == "data" and r["connection"] == connection),
+                                timeout=min(8, max(.01, end - time.monotonic())))
+                if event["event"] == "session_limit":
+                    result = event
+                    break
+                received += len(base64.b64decode(event["data"], validate=True))
+            self.assertLessEqual(received, written)
+        self.assertIsNotNone(result, "helper did not enforce 8MiB cumulative stdout cap")
         self.assertEqual(result["error"]["code"], "output_limit")
         self.assertEqual(s.proc.wait(timeout=5), 0)
         s.thread.join(timeout=2)
