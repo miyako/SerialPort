@@ -201,6 +201,17 @@ class SigningTests(unittest.TestCase):
             with self.assertRaisesRegex(signing.SigningError, "lib4d"):
                 signing.expected_files(self.component, "serial-port")
 
+    def test_compiler_intermediates_are_not_distribution_signing_surfaces(self):
+        intermediate = self.component / "userPreferences.runner/CompilerIntermediateFiles/arm64/$constants.o"
+        intermediate.parent.mkdir(parents=True)
+        intermediate.write_bytes(self.library.read_bytes())
+        self.assertEqual(set(signing.expected_files(self.component, "serial-port")),
+                         {self.helper, self.library})
+        unexpected = self.component / "Resources/unregistered-native-code"
+        unexpected.write_bytes(self.library.read_bytes())
+        with self.assertRaisesRegex(signing.SigningError, "unexpected Mach-O"):
+            signing.expected_files(self.component, "serial-port")
+
     def test_symlink_inputs_and_parents_rejected(self):
         link = self.root / "linked"
         link.symlink_to(self.component, target_is_directory=True)

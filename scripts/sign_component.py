@@ -26,7 +26,7 @@ from build_cli import smoke_test
 from build_provenance import commit, sha256, source_digest
 from ci_config import ROOT, assemble, load_config, require_tool4d_host
 from compile_component import compile_component
-from package_component import package, unpack_for_test, validate_resources
+from package_component import include_project, package, unpack_for_test, validate_resources
 from test_4d import test_4d
 
 
@@ -339,6 +339,10 @@ def macho_files(component):
     for path in sorted(component.rglob("*")):
         safe_path(path)
         if path.is_file():
+            relative = path.relative_to(component)
+            if not (include_project(relative) or relative.parts[0] in {
+                    "Resources", "Documentation", "Libraries"}):
+                continue
             with path.open("rb") as stream:
                 if stream.read(4) in MACHO_MAGICS:
                     files.append(path)
