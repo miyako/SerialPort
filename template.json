@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "initialized": false,
+  "repository": "4d-component-template",
+  "namespace": "TemplateCLI",
+  "cli": "component-cli",
+  "language": null,
+  "feature": "Deterministic UTF-8 greeting example",
+  "version": "0.1.0"
+}

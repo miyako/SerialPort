@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+build/
+dist/
+cli/target/
+cli/build/
+component/*/DerivedData/
+component/*/Project/DerivedData/
+component/*/Libraries/lib4d-*
+userPreferences.*/
+component/*/Data/
+component/*/Logs/
+component/*/Resources/bin/
+.DS_Store
+.tools/
+.initialize-*/

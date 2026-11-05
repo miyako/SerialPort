@@ -1,0 +1,15 @@
+{
+  "name": "4d-component-template",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic UTF-8 greeting example",
+  "license": "MIT",
+  "tool": {
+    "platform": "macos",
+    "branch": "20.x",
+    "version": "20.7",
+    "build": "101905",
+    "arch": "arm",
+    "sha256": "40a5d177a4f73165f52abf6ec8000249d81411c41353ccf258cece8e74639261"
+  }
+}

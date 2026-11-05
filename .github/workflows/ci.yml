@@ -1,0 +1,145 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact normalized commit to build
+        type: string
+        default: ''
+      release_call:
+        description: Release caller performs mandatory 4D acceptance separately
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  configuration:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.configuration.outputs.matrix }}
+      initialized: ${{ steps.configuration.outputs.initialized }}
+      language: ${{ steps.configuration.outputs.language }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check generated reference icons
+        run: python scripts/generate_icons.py --check
+      - name: Static and initializer tests (no CLI toolchains)
+        env:
+          TEST_CLI_LANGUAGE: none
+        run: python -m unittest discover -s tests -v
+      - name: Read configured native matrix
+        id: configuration
+        run: python scripts/ci_config.py matrix
+
+  native:
+    needs: configuration
+    if: needs.configuration.outputs.initialized == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.configuration.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      TEST_CLI_LANGUAGE: ${{ matrix.language }}
+      CLI_TARGET: ${{ matrix.target }}
+      CLI_LANGUAGE: ${{ matrix.language }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        if: matrix.language == 'go'
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Set up Rust 1.99.1 only when selected
+        if: matrix.language == 'rust'
+        run: rustup toolchain install 1.99.1 --profile minimal
+      - name: Select Rust 1.99.1
+        if: matrix.language == 'rust'
+        run: rustup default 1.99.1
+      - name: Selected CLI contract tests
+        run: python -m unittest discover -s tests -p test_cli.py -v
+      - name: Native build and protocol smoke tests
+        run: python scripts/build_cli.py --target "$CLI_TARGET" --language "$CLI_LANGUAGE"
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: |
+            build/${{ matrix.target }}/*
+            !build/${{ matrix.target }}/cargo/**
+            !build/${{ matrix.target }}/cmake/**
+          if-no-files-found: error
+          retention-days: 7
+
+  assembly:
+    needs: [configuration, native]
+    if: needs.configuration.outputs.initialized == 'true'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-x64
+          path: build/macos-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-arm64
+          path: build/macos-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-windows-x64
+          path: build/windows-x64
+      - name: Assemble universal macOS and x64 Windows resources
+        id: assemble
+        run: python scripts/ci_config.py assemble
+      - uses: actions/upload-artifact@v4
+        with:
+          name: component-resources
+          path: ${{ steps.assemble.outputs.resources }}
+          if-no-files-found: error
+          retention-days: 7
+      - name: Download pinned free tool4D for optional branch and PR integration tests
+        if: vars.FOURD_ENABLED == 'true' && github.ref_type != 'tag' && !inputs.release_call
+        env:
+          TOOL4D_URL: ${{ vars.TOOL4D_URL }}
+          TOOL4D_SHA256: ${{ vars.TOOL4D_SHA256 }}
+        run: python scripts/ci_config.py download-tool4d
+      - name: Test interpreted component from a real 4D host
+        if: vars.FOURD_ENABLED == 'true' && github.ref_type != 'tag' && !inputs.release_call
+        run: python scripts/test_4d.py --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
+      - name: Compile both 4D targets
+        if: vars.FOURD_ENABLED == 'true' && github.ref_type != 'tag' && !inputs.release_call
+        run: python scripts/compile_component.py --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
+      - name: Package and test the actual compiled component
+        if: vars.FOURD_ENABLED == 'true' && github.ref_type != 'tag' && !inputs.release_call
+        shell: python
+        run: |
+          import os, subprocess, sys
+          sys.path.insert(0, "scripts")
+          from ci_config import ROOT, load_config
+          from package_component import package, unpack_for_test
+          config = load_config(initialized=True)
+          archive = package(ROOT, repository=os.environ["GITHUB_REPOSITORY"], tag="v" + config["version"])
+          component = unpack_for_test(ROOT, archive)
+          subprocess.run([sys.executable, "scripts/test_4d.py", "--tool4d",
+                          ".tools/tool4d.app/Contents/MacOS/tool4d",
+                          "--component", str(component)], check=True)
