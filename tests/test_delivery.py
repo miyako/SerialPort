@@ -479,7 +479,7 @@ class DeliveryTests(unittest.TestCase):
             "TOOL4D_SHA256": digest or hashlib.sha256(data).hexdigest(),
         }
         with patch.dict(os.environ, environment, clear=True), patch.object(
-                ci_config.urllib.request, "urlopen", return_value=response):
+                ci_config, "open_tool4d", return_value=response):
             return ci_config.download_tool4d(self.root)
 
     def test_verified_tool4d_download_and_permissions(self):

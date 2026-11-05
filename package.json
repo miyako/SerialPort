@@ -1,8 +1,8 @@
 {
-  "name": "4d-component-template",
+  "name": "SerialPort",
   "version": "0.1.0",
   "private": true,
-  "description": "Deterministic UTF-8 greeting example",
+  "description": "Asynchronous multiplexed binary serial communication using standalone Asio",
   "license": "MIT",
   "tool": {
     "platform": "macos",

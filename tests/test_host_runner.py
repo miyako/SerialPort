@@ -17,8 +17,14 @@ CONTRACT = json.loads((ROOT / "tests/host/contract.json").read_text(encoding="ut
 
 
 def valid_status(compiled=False):
+    feature = CONTRACT["feature"]
+    cases = feature.get("cases", [
+        {"stdout": "{\"protocol\":1,\"ports\":[]}\n", "stderr": "", "exitCode": 0,
+         "value": {"protocol": 1, "ports": []}}
+        for _ in range(feature.get("caseCount", 0))
+    ])
     status = {"success": True, "finished": True, "compiled": compiled,
-              "cases": [{"ok": True, **copy.deepcopy(case)} for case in CONTRACT["feature"]["cases"]],
+              "cases": [{"ok": True, **copy.deepcopy(case)} for case in cases],
               "fileArgument": {"ok": True, "stdout": "file round trip", "stderr": "", "exitCode": 0},
               "folderArgument": {"ok": True, "stdout": "folder round trip", "stderr": "", "exitCode": 0}}
     def apply_assertions(value, assertions):
@@ -210,7 +216,7 @@ class ContractTests(unittest.TestCase):
                 lambda c: c["feature"].update(cases=[]),
                 lambda c: c["feature"].update(assertions=[]),
                 lambda c: c["execution"].update(assertions=[]),
-                lambda c: c["feature"]["cases"][0].pop("value"),
+                lambda c: c["feature"].update(caseAssertions=[]),
                 lambda c: c["execution"].update(successPaths=None),
                 lambda c: c["execution"]["assertions"].append({"path": "/success", "equal": True})):
             contract = copy.deepcopy(CONTRACT)

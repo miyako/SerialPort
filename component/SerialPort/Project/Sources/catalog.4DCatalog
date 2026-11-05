@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE base SYSTEM "http://www.4d.com/dtd/2007/base.dtd">
+<base name="SerialPort" uuid="C80BC89CBAEC58869E7BFB600EDE0BF3" collation_locale="en">
+  <schema name="DEFAULT_SCHEMA"/>
+  <base_extra><journal_file journal_file_enabled="false"/></base_extra>
+</base>
