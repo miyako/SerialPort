@@ -657,6 +657,19 @@ container/Apple `Contents/` layout requires deliberate packaging changes.
 
 ### Seven Apple secrets: registration is not implementation
 
+SerialPort now has an explicitly approved **manual macOS signing path in
+`ci.yml`**, documented in README. It uses the first **six** credentials below
+through the `macos-signing` environment. Native code is signed; the ZIP is a
+notarization container, not itself code-signed. A signed/stapled DMG seals the
+complete component data without changing its legacy layout.
+The existing user-run `set-release-secrets.sh` provisions those six repository
+secrets; jobs inherit them. The agent never runs that script or reads Keychain
+values. CI derives exactly one matching Developer ID identity from its isolated
+imported keychain and does **not** require `CODESIGN_APPLE_ID`.
+The release workflow below remains unsigned; registering secrets alone does
+not activate signing, and normal push/PR runs must never receive them.
+Real signing/notarization stays `not_run` until a credentialed run succeeds.
+
 The current `.github/workflows/release.yml` is **unsigned** and consumes **none**
 of these seven secrets. Merely registering them does **not** enable signing or
 notarization. Implementing a signing workflow is separate, explicitly approved

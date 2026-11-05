@@ -15,7 +15,7 @@ spec.loader.exec_module(compiler)
 
 class CompilerTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="compile tests ")
+        self.temp = tempfile.TemporaryDirectory(prefix=".compile-tests-", dir=ROOT)
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
         config = json.loads((ROOT / "template.json").read_text())
@@ -78,6 +78,36 @@ class CompilerTests(unittest.TestCase):
         with patch.object(compiler.subprocess, "run", side_effect=wrong):
             with self.assertRaisesRegex(ValueError, "required project and targets"):
                 compiler.compile_component(self.root, "/fake/tool4d")
+
+    def test_output_processor_runs_before_output_digest_is_recorded(self):
+        library = self.project.parent.parent / "Libraries/lib4d-arm64.dylib"
+        def processor(component):
+            self.assertEqual(component, self.project.parent.parent)
+            self.assertNotIn("output_sha256", json.loads(self.status.read_text()))
+            library.parent.mkdir(exist_ok=True)
+            library.write_bytes(b"processed compiler output")
+        with patch.object(compiler.subprocess, "run", side_effect=self.result):
+            status = compiler.compile_component(self.root, "/fake/tool4d",
+                                                postprocess_outputs=processor)
+        self.assertEqual(status["output_sha256"], compiler.output_digest(self.project.parent.parent))
+        library.write_bytes(b"post-marker mutation")
+        self.assertNotEqual(status["output_sha256"], compiler.output_digest(self.project.parent.parent))
+
+    def test_output_processor_cannot_mutate_inputs(self):
+        def processor(component):
+            (component / "Resources/changed").write_bytes(b"changed input")
+        with patch.object(compiler.subprocess, "run", side_effect=self.result):
+            with self.assertRaisesRegex(ValueError, "changed during output processing"):
+                compiler.compile_component(self.root, "/fake/tool4d", postprocess_outputs=processor)
+        self.assertNotIn("input_sha256", json.loads(self.status.read_text()))
+
+    def test_output_processor_failure_cannot_create_valid_marker(self):
+        def processor(component):
+            raise RuntimeError("processing failed")
+        with patch.object(compiler.subprocess, "run", side_effect=self.result):
+            with self.assertRaisesRegex(RuntimeError, "processing failed"):
+                compiler.compile_component(self.root, "/fake/tool4d", postprocess_outputs=processor)
+        self.assertNotIn("output_sha256", json.loads(self.status.read_text()))
 
     @unittest.skipUnless(__import__("os").name == "posix", "symlink requires POSIX")
     def test_cleanup_does_not_follow_derived_data_symlink(self):

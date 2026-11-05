@@ -3,6 +3,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      sign:
+        description: Sign and notarize the macOS distributable using the macos-signing environment
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       source_sha:
@@ -18,6 +23,27 @@ permissions:
   contents: read
 
 jobs:
+  signing_preflight:
+    if: github.event_name == 'workflow_dispatch' && inputs.sign
+    environment: macos-signing
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require signing credentials without displaying their values
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          NOTARYTOOL_APPLE_ID: ${{ secrets.NOTARYTOOL_APPLE_ID }}
+          NOTARYTOOL_TEAM_ID: ${{ secrets.NOTARYTOOL_TEAM_ID }}
+          NOTARYTOOL_PASSWORD: ${{ secrets.NOTARYTOOL_PASSWORD }}
+        run: python scripts/sign_component.py preflight
+
   configuration:
     runs-on: ubuntu-24.04
     outputs:
@@ -143,6 +169,91 @@ jobs:
           name: SerialPort-acceptance-diagnostics
           path: |
             build/acceptance.json
+            build/source-host-status.json
+            build/compiled-host-status.json
+            build/compile-status.json
+            build/host-status.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  signed_macos:
+    needs: [signing_preflight, configuration, native, assembly]
+    if: github.event_name == 'workflow_dispatch' && inputs.sign
+    environment: macos-signing
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-x64
+          path: build/macos-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-arm64
+          path: build/macos-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-windows-x64
+          path: build/windows-x64
+      - name: Download the pinned free compiler for mandatory signed-package host tests
+        env:
+          TOOL4D_URL: ${{ vars.TOOL4D_URL }}
+          TOOL4D_SHA256: ${{ vars.TOOL4D_SHA256 }}
+        run: python scripts/ci_config.py download-tool4d
+      - name: Sign native code, compile, notarize and validate the macOS distributable
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          NOTARYTOOL_APPLE_ID: ${{ secrets.NOTARYTOOL_APPLE_ID }}
+          NOTARYTOOL_TEAM_ID: ${{ secrets.NOTARYTOOL_TEAM_ID }}
+          NOTARYTOOL_PASSWORD: ${{ secrets.NOTARYTOOL_PASSWORD }}
+        run: python scripts/sign_component.py build --root . --repository "$GITHUB_REPOSITORY" --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
+      - name: Upload the validated candidate for an actual download round trip
+        uses: actions/upload-artifact@v4
+        with:
+          name: SerialPort-macOS-signing-candidate
+          path: |
+            dist/SerialPort.zip
+            dist/SerialPort.dmg
+            dist/SerialPort.signing.json
+          if-no-files-found: error
+          retention-days: 1
+      - name: Download the exact candidate bytes
+        uses: actions/download-artifact@v4
+        with:
+          name: SerialPort-macOS-signing-candidate
+          path: build/downloaded-signed
+      - name: Verify downloaded signatures, notarization tickets and real compiled-host loading
+        env:
+          NOTARYTOOL_TEAM_ID: ${{ secrets.NOTARYTOOL_TEAM_ID }}
+        run: python scripts/sign_component.py verify --root . --archive build/downloaded-signed/SerialPort.zip --evidence build/downloaded-signed/SerialPort.signing.json --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
+      - name: Delete isolated signing credentials even after failure or cancellation
+        if: always()
+        run: python scripts/sign_component.py cleanup --root .
+      - name: Upload the accepted macOS signed and notarized distributable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SerialPort-macOS-signed-notarized
+          path: |
+            build/downloaded-signed/SerialPort.zip
+            build/downloaded-signed/SerialPort.dmg
+            build/downloaded-signed/SerialPort.signing.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve credential-free signing diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SerialPort-signing-diagnostics
+          path: |
+            build/signing-status.json
             build/source-host-status.json
             build/compiled-host-status.json
             build/compile-status.json

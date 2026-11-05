@@ -193,8 +193,9 @@ It strips source, verifies real compiler output, unpacks the final ZIP and
 requires actual compiled host loading. **A native helper/source-host pass is
 not compiled-package acceptance or release readiness.** The follow-up milestone
 authorizes a prototype branch/PR and GitHub Actions validation, not merging,
-tags, release publication or signing.
-Existing CI/release patterns remain unsigned; optional hosted 4D is controlled
+tags or release publication. The separately approved macOS signing setup is
+described below; normal CI and the release workflow remain unsigned.
+Optional hosted 4D is controlled
 by `FOURD_ENABLED`. The fixed downloader fails closed if its approved origin
 policy rejects a redirect. The downloader validates every redirect hop against
 the exact HTTPS vendor hosts `resources-download.4d.com` and `builds2.4d.com`,
@@ -223,6 +224,103 @@ Native CLI test success does not prove native Windows/Intel **4D host loading**
 or physical-device behavior. The available actual compiled-host gate is macOS
 ARM64. Acceptance therefore remains `result:"partial"`, `finished:true`,
 `release_ready:false`; signing/notarization and hardware checks remain separate.
+
+## macOS signed distribution (manual CI)
+
+**Signing credentials are not inherited from the template.** Register them in
+this repository before expecting a signed artifact. CI fails closed and lists
+missing **names only**; an unsigned build or a skipped signing job is not signed
+acceptance. Do not paste certificates, private keys or passwords into chat,
+issues, workflow files or logs.
+
+In **Settings -> Environments**, configure `macos-signing`. Restrict it to
+reviewed branches and enable a required reviewer where available **before**
+adding private credentials. The six existing repository Actions secrets are
+inherited by jobs using this environment; matching environment secrets can
+override them. No seventh signing-identity secret is required:
+
+| Secret | Required value |
+| --- | --- |
+| `APPLE_DEVELOPER_ID_CERTIFICATE` | Base64-encoded Developer ID Application `.p12`, including its private key |
+| `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD` | That `.p12` export password |
+| `KEYCHAIN_PASSWORD` | Independent strong password for the ephemeral CI keychain |
+| `NOTARYTOOL_APPLE_ID` | Authorized Apple account email |
+| `NOTARYTOOL_TEAM_ID` | Matching Apple Developer Team ID |
+| `NOTARYTOOL_PASSWORD` | Apple app-specific password, not the normal login password |
+
+**The user, never the agent, provisions values.** Use the existing local
+provisioner in your own terminal:
+
+```sh
+~/.claude/skills/4d-plugin-modernize/set-release-secrets.sh miyako/SerialPort
+```
+
+By default it reuses the certificate and credentials already stored in the
+login Keychain service `4d-plugin-release`, checks the certificate and asks you
+to confirm it before setting the six repository secrets. Do not manually
+recreate known Keychain values or add `CERT_P12` by default. Only if the script
+reports no stored certificate, or you choose to replace it, select the `.p12`
+yourself and use its documented `CERT_P12` option. The agent must not run this
+script, retrieve Keychain values or upload credentials.
+
+CI derives the signing identity from the **new isolated keychain only** and
+requires exactly one valid Developer ID Application identity for
+`NOTARYTOOL_TEAM_ID`. Missing, incompatible or ambiguous identities fail; CI
+never picks an unrelated identity from the runner's login keychain.
+
+Run **Actions -> CI -> Run workflow**, select the reviewed branch, and enable
+`sign`. The CLI equivalent is:
+
+```sh
+gh workflow run ci.yml --repo miyako/SerialPort \
+  --ref YOUR_REVIEWED_BRANCH -f sign=true
+```
+
+Only this explicit manual event can access signing credentials; push, PR and
+reusable release calls cannot activate signing. The workflow retains all
+native/provenance checks and uses an isolated keychain, minimal signing-tool
+access, unconditional cleanup and no helper entitlements. It signs the assembled
+universal helper **before** source-host testing and compilation, then signs
+compiler-generated Mach-O libraries **before** recording their output digest.
+It never edits stale compiler markers to approve changed outputs.
+
+The flat tool4d-20.7-compatible `.4dbase` layout is preserved. Its `.4DZ` is data,
+not a Mach-O executable or an application bundle: the workflow does not pretend
+to code-sign it. Native code is individually Developer ID signed, and a signed
+DMG seals the complete distributable, including compiled 4D data. This does not
+silently adopt the newer `Contents`/`BNDL` component layout or claim a verified
+4D Application Builder signing integration for this pinned compiler.
+
+Both ZIP and DMG submissions must return Apple's **Accepted** status. The DMG
+is stapled and its ticket validated; the bare helper and ZIP are **not**
+stapleable. Use the DMG for a ticket-bearing container; the ZIP's bare-code ticket
+lookup can require network access. No signature, notarization or quarantine
+checks are bypassed.
+
+After signature, notarization and compiled-host checks pass, CI uploads and
+downloads a candidate, verifies the exact returned ZIP/DMG bytes and signatures,
+and repeats real compiled-host acceptance. Only then is
+**SerialPort-macOS-signed-notarized** uploaded, containing `SerialPort.zip`,
+`SerialPort.dmg` and SHA256-bound `SerialPort.signing.json`. The short-lived
+`SerialPort-macOS-signing-candidate` is an intermediate round-trip input, not the
+final handoff. No tag, Release or merge is created.
+
+**Windows is separate:** the Windows helper still has no configured Authenticode
+signing setup; Apple credentials/notarization do not sign PE files or establish
+SmartScreen reputation. Do not treat this macOS artifact as a Windows-signed
+distribution. A suitable existing Windows certificate or Artifact Signing
+service arrangement must be approved and configured separately.
+
+Actual Developer ID/notary execution remains `not_run` until credentials are
+provisioned and the signed workflow passes. Even then, clean-machine,
+quarantined-download acceptance in the user's intended 4D host and physical
+hardware checks remain distinct; CI loading is not a universal Gatekeeper or
+offline-use guarantee.
+
+References: [Apple signing](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac),
+[Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow),
+[4D component layout change](https://blog.4d.com/notarization-on-macos-changes-to-component-structure/),
+[Microsoft SignTool](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool).
 
 ## Hardware acceptance
 
