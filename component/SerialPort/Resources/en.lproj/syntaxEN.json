@@ -1,0 +1,483 @@
+{
+	"_method_": {},
+	"cs.MiyakoSerial": {
+		"_CLI": {
+			"new()": {
+				"Syntax": "**.new**( *executableName* : Text; *target* : Text )",
+				"Params": [
+					[
+						"executableName",
+						"Text",
+						"->"
+					],
+					[
+						"target",
+						"Text",
+						"->"
+					]
+				],
+				"Summary": ""
+			}
+		},
+		"SerialPort": {
+			"new()": {
+				"Syntax": "**.new**( *target* : Text; *callback* : Object )",
+				"Params": [
+					[
+						"target",
+						"Text",
+						"->"
+					],
+					[
+						"callback",
+						"Object",
+						"->"
+					]
+				],
+				"Summary": ""
+			}
+		},
+		"_LineProcess": {
+			"new()": {
+				"Syntax": "**.new**( *file* : 4D.File; *receiver* : Object )",
+				"Params": [
+					[
+						"file",
+						"4D.File",
+						"->"
+					],
+					[
+						"receiver",
+						"Object",
+						"->"
+					]
+				],
+				"Summary": ""
+			}
+		}
+	},
+	"_CLI": {
+		"resolve()": {
+			"Syntax": "**.resolve**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"execute()": {
+			"Syntax": "**.execute**( *arguments* : Collection )->result : Object",
+			"Params": [
+				[
+					"arguments",
+					"Collection",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"get compiled()": {
+			"Syntax": "**.get compiled**()->compiled : Boolean",
+			"Params": [
+				[
+					"compiled",
+					"Boolean",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"target": {
+			"Syntax": "target : Text"
+		},
+		"executableName": {
+			"Syntax": "executableName : Text"
+		}
+	},
+	"SerialPort": {
+		"enumerate()": {
+			"Syntax": "**.enumerate**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"shutdown()": {
+			"Syntax": "**.shutdown**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"write()": {
+			"Syntax": "**.write**( *connection* : Text; *bytes* : Blob; *timeoutMs* : Integer )->result : Object",
+			"Params": [
+				[
+					"connection",
+					"Text",
+					"->"
+				],
+				[
+					"bytes",
+					"Blob",
+					"->"
+				],
+				[
+					"timeoutMs",
+					"Integer",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"close()": {
+			"Syntax": "**.close**( *connection* : Text )->result : Object",
+			"Params": [
+				[
+					"connection",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"start()": {
+			"Syntax": "**.start**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"open()": {
+			"Syntax": "**.open**( *path* : Text; *config* : Object )->result : Object",
+			"Params": [
+				[
+					"path",
+					"Text",
+					"->"
+				],
+				[
+					"config",
+					"Object",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"configure()": {
+			"Syntax": "**.configure**( *connection* : Text; *config* : Object )->result : Object",
+			"Params": [
+				[
+					"connection",
+					"Text",
+					"->"
+				],
+				[
+					"config",
+					"Object",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"version()": {
+			"Syntax": "**.version**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"terminate()": {
+			"Syntax": "**.terminate**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"cancel()": {
+			"Syntax": "**.cancel**( *requestId* : Text )->result : Object",
+			"Params": [
+				[
+					"requestId",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"list()": {
+			"Syntax": "**.list**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"closing": {
+			"Syntax": "closing : Boolean"
+		},
+		"running": {
+			"Syntax": "running : Boolean"
+		}
+	},
+	"_Process": {
+		"execute()": {
+			"Syntax": "**.execute**( *file* : 4D.File; *arguments* : Collection )->result : Object",
+			"Params": [
+				[
+					"file",
+					"4D.File",
+					"->"
+				],
+				[
+					"arguments",
+					"Collection",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"quote()": {
+			"Syntax": "**.quote**( *argument* : Text )->quoted : Text",
+			"Params": [
+				[
+					"argument",
+					"Text",
+					"->"
+				],
+				[
+					"quoted",
+					"Text",
+					"<-"
+				]
+			],
+			"Summary": ""
+		}
+	},
+	"_LineProcess": {
+		"onTerminate()": {
+			"Syntax": "**.onTerminate**( *worker* : Object; *info* : Object )",
+			"Params": [
+				[
+					"worker",
+					"Object",
+					"->"
+				],
+				[
+					"info",
+					"Object",
+					"->"
+				]
+			],
+			"Summary": ""
+		},
+		"abort()": {
+			"Syntax": "**.abort**( *code* : Text; *message* : Text; *details* : Collection )",
+			"Params": [
+				[
+					"code",
+					"Text",
+					"->"
+				],
+				[
+					"message",
+					"Text",
+					"->"
+				],
+				[
+					"details",
+					"Collection",
+					"->"
+				]
+			],
+			"Summary": ""
+		},
+		"onError()": {
+			"Syntax": "**.onError**( *worker* : Object; *info* : Object )",
+			"Params": [
+				[
+					"worker",
+					"Object",
+					"->"
+				],
+				[
+					"info",
+					"Object",
+					"->"
+				]
+			],
+			"Summary": ""
+		},
+		"onResponse()": {
+			"Syntax": "**.onResponse**( *worker* : Object; *info* : Object )",
+			"Params": [
+				[
+					"worker",
+					"Object",
+					"->"
+				],
+				[
+					"info",
+					"Object",
+					"->"
+				]
+			],
+			"Summary": ""
+		},
+		"onDataError()": {
+			"Syntax": "**.onDataError**( *worker* : Object; *info* : Object )",
+			"Params": [
+				[
+					"worker",
+					"Object",
+					"->"
+				],
+				[
+					"info",
+					"Object",
+					"->"
+				]
+			],
+			"Summary": ""
+		},
+		"onData()": {
+			"Syntax": "**.onData**( *worker* : Object; *info* : Object )",
+			"Params": [
+				[
+					"worker",
+					"Object",
+					"->"
+				],
+				[
+					"info",
+					"Object",
+					"->"
+				]
+			],
+			"Summary": ""
+		},
+		"send()": {
+			"Syntax": "**.send**( *frame* : Text )->result : Object",
+			"Params": [
+				[
+					"frame",
+					"Text",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"start()": {
+			"Syntax": "**.start**( *file* : 4D.File )->result : Object",
+			"Params": [
+				[
+					"file",
+					"4D.File",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"failed": {
+			"Syntax": "failed : Boolean"
+		},
+		"currentDirectory": {
+			"Syntax": "currentDirectory : 4D.Folder"
+		},
+		"timeout": {
+			"Syntax": "timeout : Integer"
+		},
+		"hideWindow": {
+			"Syntax": "hideWindow : Boolean"
+		},
+		"dataType": {
+			"Syntax": "dataType : Text"
+		},
+		"worker": {
+			"Syntax": "worker : 4D.SystemWorker"
+		},
+		"received": {
+			"Syntax": "received : Integer"
+		},
+		"encoding": {
+			"Syntax": "encoding : Text"
+		},
+		"receiver": {
+			"Syntax": "receiver : Object"
+		},
+		"buffer": {
+			"Syntax": "buffer : Text"
+		}
+	}
+}

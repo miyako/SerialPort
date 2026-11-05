@@ -25,7 +25,8 @@ class CompilerTests(unittest.TestCase):
             shutil.copy2(ROOT / name, self.root / name)
         self.name = config["repository"]
         self.feature_class = config.get("feature_class", "Greeting")
-        shutil.copytree(ROOT / "component" / self.name, self.root / "component" / self.name)
+        shutil.copytree(ROOT / "component" / self.name, self.root / "component" / self.name,
+                        ignore=shutil.ignore_patterns("DerivedData"))
         self.project = self.root / "component" / self.name / "Project" / (self.name + ".4DProject")
         self.status = self.root / "build/compile-status.json"
 

@@ -123,23 +123,29 @@ jobs:
           TOOL4D_URL: ${{ vars.TOOL4D_URL }}
           TOOL4D_SHA256: ${{ vars.TOOL4D_SHA256 }}
         run: python scripts/ci_config.py download-tool4d
-      - name: Test interpreted component from a real 4D host
+      - name: Validate source, compilation and the actual unpacked compiled package
         if: vars.FOURD_ENABLED == 'true' && github.ref_type != 'tag' && !inputs.release_call
-        run: python scripts/test_4d.py --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
-      - name: Compile both 4D targets
+        run: python scripts/accept_local.py --repository "$GITHUB_REPOSITORY" --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
+      - name: Upload verified unsigned compiled package and evidence
         if: vars.FOURD_ENABLED == 'true' && github.ref_type != 'tag' && !inputs.release_call
-        run: python scripts/compile_component.py --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
-      - name: Package and test the actual compiled component
-        if: vars.FOURD_ENABLED == 'true' && github.ref_type != 'tag' && !inputs.release_call
-        shell: python
-        run: |
-          import os, subprocess, sys
-          sys.path.insert(0, "scripts")
-          from ci_config import ROOT, load_config
-          from package_component import package, unpack_for_test
-          config = load_config(initialized=True)
-          archive = package(ROOT, repository=os.environ["GITHUB_REPOSITORY"], tag="v" + config["version"])
-          component = unpack_for_test(ROOT, archive)
-          subprocess.run([sys.executable, "scripts/test_4d.py", "--tool4d",
-                          ".tools/tool4d.app/Contents/MacOS/tool4d",
-                          "--component", str(component)], check=True)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SerialPort-compiled-component
+          path: |
+            dist/SerialPort.zip
+            dist/SerialPort.acceptance.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve 4D acceptance diagnostics
+        if: always() && vars.FOURD_ENABLED == 'true' && github.ref_type != 'tag' && !inputs.release_call
+        uses: actions/upload-artifact@v4
+        with:
+          name: SerialPort-acceptance-diagnostics
+          path: |
+            build/acceptance.json
+            build/source-host-status.json
+            build/compiled-host-status.json
+            build/compile-status.json
+            build/host-status.json
+          if-no-files-found: warn
+          retention-days: 14

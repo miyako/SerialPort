@@ -2,20 +2,27 @@
   "schema": 1,
   "feature": {
     "casesPath": "/cases",
-    "cases": [
-      {"stdout": "{\"protocol\":1,\"message\":\"Hello, world!\"}\n", "stderr": "", "exitCode": 0, "value": {"protocol": 1, "message": "Hello, world!"}},
-      {"stdout": "{\"protocol\":1,\"message\":\"Hello, path with spaces!\"}\n", "stderr": "", "exitCode": 0, "value": {"protocol": 1, "message": "Hello, path with spaces!"}},
-      {"stdout": "{\"protocol\":1,\"message\":\"Hello, quote \\\" and \\\\ slash!\"}\n", "stderr": "", "exitCode": 0, "value": {"protocol": 1, "message": "Hello, quote \" and \\ slash!"}},
-      {"stdout": "{\"protocol\":1,\"message\":\"Hello, line\\nbreak!\"}\n", "stderr": "", "exitCode": 0, "value": {"protocol": 1, "message": "Hello, line\nbreak!"}},
-      {"stdout": "{\"protocol\":1,\"message\":\"Hello, 日本語!\"}\n", "stderr": "", "exitCode": 0, "value": {"protocol": 1, "message": "Hello, 日本語!"}},
-      {"stdout": "{\"protocol\":1,\"message\":\"Hello, $() ; & % !!\"}\n", "stderr": "", "exitCode": 0, "value": {"protocol": 1, "message": "Hello, $() ; & % !!"}}
-    ],
+    "caseCount": 1,
+    "caseAssertions": [{"path": "/value/protocol", "equals": 1}],
     "assertions": [
       {"path": "/invalid/ok", "equals": false},
       {"path": "/invalid/exitCode", "equals": 2},
       {"path": "/invalid/stdout", "equals": ""},
-      {"path": "/invalid/stderr", "equals": "{\"protocol\":1,\"error\":{\"code\":\"invalid_arguments\",\"message\":\"expected greet --name <non-empty UTF-8 name> or --version\"}}\n"},
       {"path": "/invalid/error/code", "equals": "cli_error"},
+      {"path": "/async/start/ok", "equals": true},
+      {"path": "/async/invalidCallback/ok", "equals": false},
+      {"path": "/async/invalidCallback/error/code", "equals": "invalid_argument"},
+      {"path": "/async/shutdown/ok", "equals": true},
+      {"path": "/async/returnedBeforeCallbacks", "equals": true},
+      {"path": "/async/responseCount", "equals": 6},
+      {"path": "/async/writeError", "equals": "connection_not_found"},
+      {"path": "/async/exitCode", "equals": 0},
+      {"path": "/async/binaryFrames", "equals": ["AP+A", "AP+A"]},
+      {"path": "/async/oversized/ok", "equals": false},
+      {"path": "/async/oversized/error/code", "equals": "frame_overflow"},
+      {"path": "/async/responses", "length": 6, "each": [
+        {"path": "/protocol", "equals": 1}
+      ]},
       {"path": "/version/ok", "equals": true},
       {"path": "/version/stdout", "equals": "{\"protocol\":1,\"version\":\"0.1.0\"}\n"},
       {"path": "/version/stderr", "equals": ""},

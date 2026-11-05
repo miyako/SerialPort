@@ -1,10 +1,11 @@
 {
   "schema": 1,
-  "initialized": false,
-  "repository": "4d-component-template",
-  "namespace": "TemplateCLI",
-  "cli": "component-cli",
-  "language": null,
-  "feature": "Deterministic UTF-8 greeting example",
-  "version": "0.1.0"
+  "initialized": true,
+  "repository": "SerialPort",
+  "namespace": "MiyakoSerial",
+  "cli": "serial-port",
+  "language": "cpp",
+  "feature": "Asynchronous multiplexed binary serial communication using standalone Asio",
+  "version": "0.1.0",
+  "feature_class": "SerialPort"
 }

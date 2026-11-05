@@ -3,10 +3,9 @@ var $ignored : Integer
 var $parameter; $name; $target : Text
 var $folderPath : Text
 var $request; $result; $report : Object
-var $tool : cs.TemplateCLI.Greeting
+var $tool : cs.MiyakoSerial.SerialPort
 var $requestFile; $statusFile : 4D.File
 var $renamedExecutable : 4D.File
-var $cases : Collection
 var $invalid : Variant
 var HOST_StatusFile : 4D.File
 var HOST_Phase : Text
@@ -32,8 +31,7 @@ $target:="macOS-universal"
 If (Is Windows)
 	$target:="Windows-x64"
 End if
-$tool:=cs.TemplateCLI.Greeting.new($target)
-$cases:=New collection("world"; "path with spaces"; "quote \" and \\ slash"; "line\nbreak"; "日本語"; "$() ; & % !")
+$tool:=cs.MiyakoSerial.SerialPort.new($target)
 $report:=New object("success"; True; "finished"; False; "cases"; New collection)
 $report.compiled:=$tool._cli.compiled
 HOST_Phase:="renamed executable"
@@ -42,7 +40,7 @@ If (Is Windows)
 Else
 	$renamedExecutable:=File($request.executable; fk posix path)
 End if
-$report.renamedExecutable:=cs.TemplateCLI._Process.new().execute($renamedExecutable; New collection("--version"))
+$report.renamedExecutable:=cs.MiyakoSerial._Process.new().execute($renamedExecutable; New collection("--version"))
 If (Not($report.renamedExecutable.ok))
 	$report.success:=False
 End if
@@ -50,18 +48,12 @@ HOST_Phase:="feature cases"
 If ($request.expectCompiled#$report.compiled)
 	$report.success:=False
 End if
-For each ($name; $cases)
-	$result:=$tool.greet($name)
-	$report.cases.push($result)
-	If (Not($result.ok))
-		$report.success:=False
-	Else
-		If ($result.value.message#("Hello, "+$name+"!"))
-			$report.success:=False
-		End if
-	End if
-End for each
-$result:=$tool.greet("")
+$result:=$tool.enumerate()
+$report.cases.push($result)
+If (Not($result.ok))
+	$report.success:=False
+End if
+$result:=$tool._cli.execute(New collection("invalid-command"))
 $report.invalid:=$result
 If ($result.ok | ($result.exitCode#2))
 	$report.success:=False
@@ -76,18 +68,18 @@ Else
 	End if
 End if
 HOST_Phase:="missing executable"
-$result:=cs.TemplateCLI._CLI.new("missing-cli"; $target).execute(New collection("--version"))
+$result:=cs.MiyakoSerial._CLI.new("missing-cli"; $target).execute(New collection("--version"))
 $report.missing:=$result
 If ($result.error.code#"missing_executable")
 	$report.success:=False
 End if
-$result:=cs.TemplateCLI.Greeting.new("unsupported-arm-target").version()
+$result:=cs.MiyakoSerial.SerialPort.new("unsupported-arm-target").version()
 $report.unsupported:=$result
 If ($result.error.code#"unsupported_architecture")
 	$report.success:=False
 End if
 HOST_Phase:="launch failure"
-$result:=cs.TemplateCLI._Process.new().execute($requestFile; New collection)
+$result:=cs.MiyakoSerial._Process.new().execute($requestFile; New collection)
 $report.launch:=$result
 If ($result.error.code#"launch_failed")
 	$report.success:=False
@@ -120,19 +112,19 @@ For each ($name; New collection("true"; "false"; "null"; "1"; "[]"))
 	End if
 End for each
 HOST_Phase:="File argument"
-$result:=cs.TemplateCLI._CLI.new("component-cli"; $target).execute(New collection("greet"; "--name"; $requestFile))
+$result:=cs.MiyakoSerial._CLI.new("serial-port"; $target).execute(New collection("echo"; "--text"; $requestFile))
 $report.fileArgument:=$result
 If (Not($result.ok))
 	$report.success:=False
 Else
-	If (JSON Parse($result.stdout).message#("Hello, "+$parameter+"!"))
+	If (JSON Parse($result.stdout).text#$parameter)
 		$report.success:=False
 	End if
 End if
 $report.rejectedArguments:=New collection
 HOST_Phase:="scalar arguments"
 For each ($invalid; New collection(123; 1.25; True; False; Null; Current date; Current time; New collection; New object))
-	$result:=cs.TemplateCLI._Process.new().execute($requestFile; New collection($invalid))
+	$result:=cs.MiyakoSerial._Process.new().execute($requestFile; New collection($invalid))
 	$report.rejectedArguments.push(New object("type"; Value type($invalid); "result"; $result))
 	If ($result.ok | ($result.error.code#"invalid_argument"))
 		$report.success:=False
@@ -141,14 +133,14 @@ End for each
 $report.rejectedNul:=New collection
 HOST_Phase:="NUL arguments"
 For each ($name; New collection(Char(0)+"prefix"; "middle"+Char(0)+"suffix"; "trailing"+Char(0)))
-	$result:=cs.TemplateCLI._Process.new().execute($requestFile; New collection($name))
+	$result:=cs.MiyakoSerial._Process.new().execute($requestFile; New collection($name))
 	$report.rejectedNul.push($result)
 	If ($result.ok | ($result.error.code#"invalid_argument"))
 		$report.success:=False
 	End if
 End for each
-$report.missingFile:=cs.TemplateCLI._Process.new().execute(Null; New collection)
-$report.missingArguments:=cs.TemplateCLI._Process.new().execute($requestFile; Null)
+$report.missingFile:=cs.MiyakoSerial._Process.new().execute(Null; New collection)
+$report.missingArguments:=cs.MiyakoSerial._Process.new().execute($requestFile; Null)
 If ($report.missingFile.ok | ($report.missingFile.error.code#"invalid_argument"))
 	$report.success:=False
 End if
@@ -156,7 +148,7 @@ If ($report.missingArguments.ok | ($report.missingArguments.error.code#"invalid_
 	$report.success:=False
 End if
 HOST_Phase:="Folder argument"
-$result:=cs.TemplateCLI._CLI.new("component-cli"; $target).execute(New collection("greet"; "--name"; $requestFile.parent))
+$result:=cs.MiyakoSerial._CLI.new("serial-port"; $target).execute(New collection("echo"; "--text"; $requestFile.parent))
 $report.folderArgument:=$result
 $folderPath:=$requestFile.parent.path
 If (Is Windows)
@@ -165,14 +157,21 @@ End if
 If (Not($result.ok))
 	$report.success:=False
 Else
-	If (JSON Parse($result.stdout).message#("Hello, "+$folderPath+"!"))
+	If (JSON Parse($result.stdout).text#$folderPath)
 		$report.success:=False
 	End if
 End if
-$report.finished:=True
 ON ERR CALL(HOST_PreviousHandler; ek local)
 $statusFile.setText(JSON Stringify($report))
 HOST_StatusFile:=Null
 HOST_Phase:=""
 HOST_PreviousHandler:=""
+CALL WORKER("Serial host owner"; "Serial_async"; $target; $report; $statusFile.platformPath)
+// Keep the headless startup alive while the owner delivers callbacks.
+DELAY PROCESS(Current process; 3600)
+$report:=JSON Parse($statusFile.getText())
+$report.success:=False
+$report.finished:=False
+$report.phase:="async host timeout"
+$statusFile.setText(JSON Stringify($report))
 QUIT 4D

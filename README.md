@@ -1,500 +1,290 @@
-# 4D CLI component template
+# SerialPort
 
-An agent-ready **real 4D component project** wrapping a native CLI on macOS and
-Windows. Choose **Go, Rust or C++**; initialization keeps only that starter.
-The working greeting example uses the same deterministic UTF-8 JSON protocol in
-each language. Replace the example with your feature, not the generic adapter.
+First asynchronous serial communication prototype for **4D**, implemented as a
+real CLI-backed component: `cs.MiyakoSerial.SerialPort` -> one persistent
+`4D.SystemWorker` -> bundled C++17/standalone Asio helper -> multiple serial ports.
+No 4D plug-in SDK or host plug-in installation is involved.
 
-## Start here: THINK / ASK → RUN
+Repository/component/project/package identity: **SerialPort**. Independent
+namespace: **MiyakoSerial**. Public class: **SerialPort**. Executable:
+**serial-port**, version **0.1.0**. Source compatibilityVersion is 2060;
+the inherited available test runtime is free **tool4d 20.7 LTS/build 101905**
+on macOS ARM64. This prototype targets that runtime, not a promise of support
+on every earlier release. macOS CLI deployment target is 11+, subject to the
+4D host's own minimum. Windows target is x64/MSVC/static CRT; ARM64 is unsupported.
 
-Read [AGENTS.md](AGENTS.md), the canonical detailed implementation/acceptance
-playbook. Resolve exact GitHub identity/case, one language, an independent unique
-namespace, CLI basename and feature semantics **before** initialization.
-Do not initialize the original template repository; check its actual remote
-using the playbook's identity rules.
+## API and owner lifetime
 
-For Copilot, the short [.github/copilot-instructions.md](.github/copilot-instructions.md)
-points to that guide; the task-specific
-[4d-cli-component skill](.github/skills/4d-cli-component/SKILL.md) uses the
-[official project skill convention](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills).
-Supported clients select relevant skills, but file presence does not guarantee
-session discovery/invocation. In Copilot CLI, `/skills reload` and
-`/skills info 4d-cli-component` inspect discovery; these are slash commands, not
-shell commands. Read the playbook directly if the client does not load the skill.
+See [SerialPort](component/SerialPort/Documentation/Classes/SerialPort.md),
+[_CLI](component/SerialPort/Documentation/Classes/_CLI.md),
+[_Process](component/SerialPort/Documentation/Classes/_Process.md), and
+[_LineProcess](component/SerialPort/Documentation/Classes/_LineProcess.md).
 
-The playbook includes a [November 1, 2026 UUIDv7 adoption case study](AGENTS.md#uuid-adoption-case-study--november-1-2026)
-with real source/compiled host validation and explicit limitations.
+Construct/retain the session **in a live `CALL WORKER` owner**, then let the
+method return. Do not call `.wait()` as the normal callback path. Commands to
+that session must execute in that same worker. Native I/O is asynchronous;
+strict preemptive 4D compatibility is not claimed.
 
-## Use this template
-
-Click **Use this template → Create a new repository**, then prompt your agent:
-
-> Implement a 4D component in this repository that [FEATURE]. Use [Go/Rust/C++],
-> unique class namespace [NAMESPACE], CLI basename [CLI_NAME], and these
-> constraints: [DEPENDENCIES, LICENSE, LIMITS, ERROR BEHAVIOR]. Follow AGENTS.md,
-> initialize the exact destination repository name, implement the feature and
-> its host API/docs/tests, and deliver a compiled component release. Report
-> unvalidated platforms and required setup honestly.
-
-For a local package rather than publication, say so explicitly. Unsigned local
-free tool4d acceptance needs no signing secret, license activation, tag/release
-or repository settings. Partial local validation is **NOT release ready**.
-
-```sh
-python3 scripts/initialize.py --repository hello-tools --namespace AcmeHello \
-  --cli hello-cli --language go --feature "The requested feature"
-```
-
-The repository argument is the **exact new GitHub repository basename**, not
-`owner/name`, the worktree name or this template's original name. Validation
-allows ASCII letters/digits/`_`/`-` up to 80 characters, namespace identifiers
-up to 31 characters, and lowercase CLI letters/digits/`-` up to 63 characters.
-Namespace uniqueness across a host's components is the user's responsibility.
-
-Initialization renames the component root, project, catalog name/UUID, XML
-namespace, CLI identity/manifests, class docs, README samples, host fixtures and
-package metadata. Workflows derive paths/asset names from `template.json`.
-It stages/validates replacements first, preserves binary icons and keeps only
-the selected `cli/`. Identical reruns are unchanged; conflicting reconfiguration
-requires a fresh template. **The feature description is recorded, not automatically
-implemented.** Read [AGENTS.md](AGENTS.md) for the end-to-end agent workflow.
-
-After initialization, optional `scripts/rename_feature.py --root . --class NAME`
-rewrites only the known Greeting identity/configuration registry. It does **not**
-implement the new API or protocol. Follow the playbook's full replacement
-inventory, including build smoke tests, host assertions and completion metadata.
-
-The uninitialized template is **not releasable** and normal template CI does not
-install three unrelated language toolchains.
-
-## Requirements and specifications
-
-| Surface | Specification |
-| --- | --- |
-| 4D source | Project compatibilityVersion 2060; 4D 20.7 LTS tool4d used locally |
-| Host installation | Dependency manager GitHub support: 20 R6 or later / compatible current LTS; confirm your release |
-| macOS CLI | macOS 12+ with pinned Go 1.26; Rust/C++ deploy to 11+; universal x86_64 + arm64; follow your 4D host's requirements |
-| Windows CLI | x64, hosted Windows Server 2022; explicitly select `Windows-x64` in the API |
-| Windows ARM64 | No native CLI artifact or verified native 4D compiler target; x64 emulation is not a supported/tested promise |
-| Go | CI 1.26.10 (source minimum 1.23), stdlib only, CGO disabled |
-| Rust | CI 1.99.1, edition 2021, std only |
-| C++ | C++17/CMake, hosted Xcode/MSVC, static Windows CRT |
-| Python | 3.10+ locally, CI 3.12 |
-
-Only the selected language is built. Pins are a starting point, not a security
-support promise: update deliberately and repeat checks. GitHub services runner
-images/Xcode/MSVC, so compiler patch versions are not immutable.
-`package.json` is name/version metadata, not a Node application.
-
-## Architecture and exposed API
-
-### Choose the architecture, not a hybrid
-
-| Choice | Execution and installation |
-| --- | --- |
-| **CLI-backed component: this template** | Host code calls component classes, which launch a bundled native CLI in a separate process through `4D.SystemWorker`. Install the component via the Dependency manager or `Components/`; its executable ships in `Resources/bin/`. |
-| **Native 4D plug-in: separate architecture** | Native code integrates through the 4D plug-in SDK. Install the plug-in in the host using 4D's supported plug-in installation mechanism, not inside a component. |
-
-If native 4D SDK integration is required, choose the separate host-installed
-plug-in architecture and make its host installation and compatibility requirements
-explicit. Do not generate or recommend a component-over-plug-in hybrid as a
-self-contained component solution. A component cannot privately load or deploy
-a 4D plug-in; wrapping plug-in commands cannot hide, eliminate or satisfy the
-host plug-in installation requirement. This is a deployment boundary, not a
-blanket restriction on host code calling commands from an installed plug-in:
-such a plug-in remains an explicit host dependency.
-See the canonical [architecture-selection rules](AGENTS.md#architecture-and-deployment-boundary).
-
-```text
-template.json                         initialization/release identity
-cli/                                  one selected language implementation
-component/<repository>/
-  Project/<repository>.4DProject       real 4D anchor
-  Project/Sources/Classes/
-    _CLI.4dm                          generic resource resolver
-    _Process.4dm                      generic quoting/execution/status adapter
-    Greeting.4dm                      replaceable feature API
-  Project/Sources/Methods/_CaptureError.4dm
-  Documentation/Classes/*.md           class contracts
-  Resources/logo.png + logo.svg        original icon/reference wrapper
-  Resources/bin/macOS/<cli>            assembled universal executable
-  Resources/bin/Windows/<cli>.exe      x64 executable
-tooling/compiler/                     real Compile project driver
-tests/host/                           namespaced host runtime fixture
-tests/host/contract.json              feature/execution host assertion registry
-tests/cli-contract.json               configurable native CLI smoke vectors
-scripts/                              initialize/build/compile/package/test
-```
-
-The **component/project/catalog/package/release ZIP name MUST equal the repository
-basename** for dependency-manager releases. Namespace is independent:
-`settings.4DSettings` is XML with
-`<general component_classStore_name="TemplateCLI"/>`.
-Host code uses `cs.TemplateCLI.Greeting`; internal code uses `cs.Greeting`.
-4D shares classes through the namespace: underscores are internal **by
-convention**, not private access or an exported-class manifest.
-
-Class docs:
-[Greeting](component/4d-component-template/Documentation/Classes/Greeting.md),
-[_CLI](component/4d-component-template/Documentation/Classes/_CLI.md),
-[_Process](component/4d-component-template/Documentation/Classes/_Process.md).
-The actual compiler generates `Resources/en.lproj/syntaxEN.json`, preventing
-stale completion metadata.
-
-### Working host sample
-
-After installation, use your initialized namespace:
+Minimal host method `Serial_demo`:
 
 ```4d
-var $tool : cs.TemplateCLI.Greeting
+#DECLARE($command : Text; $port : Text)
+var SERIAL : cs.MiyakoSerial.SerialPort
 var $result : Object
-var $target : Text
-$target:="macOS-universal"
-If (Is Windows)
-  $target:="Windows-x64"
-End if
-$tool:=cs.TemplateCLI.Greeting.new($target)
-$result:=$tool.greet("4D")
-If ($result.ok)
-  ALERT($result.value.message)  // Hello, 4D!
-Else
-  ALERT($result.error.code+": "+$result.error.message)
+Case of
+  : ($command="start")
+    var $target : Text
+    $target:="macOS-universal"
+    If (Is Windows)
+      $target:="Windows-x64"
+    End if
+    SERIAL:=cs.MiyakoSerial.SerialPort.new($target; Formula(Serial_demo_event($1)))
+    $result:=SERIAL.start()
+    If ($result.ok)
+      $result:=SERIAL.open($port; New object("baudRate"; 9600; "dataBits"; 8;
+        "stopBits"; "one"; "parity"; "none"; "flowControl"; "none"))
+    End if
+  : ($command="shutdown")
+    $result:=SERIAL.shutdown()
+End case
+// Forward immediate errors to your UI/log; ok:true means submitted, not completed.
+```
+
+Start from the UI with
+`CALL WORKER("My serial owner"; "Serial_demo"; "start"; "/dev/cu.YOUR_DEVICE")`
+or the OS's `"COM3"` path. The `Serial_demo_event` callback receives one Object:
+
+```4d
+#DECLARE($event : Object)
+var SERIAL : cs.MiyakoSerial.SerialPort
+// Store open reply's result.connection; use SERIAL.write(id; blob; 1000).
+// data events carry connection and bytes (Blob); accumulate device framing.
+// Forward errors/disconnections to UI via CALL FORM or CALL WORKER(1; ...).
+If ($event.event="terminated")
+  SERIAL:=Null
+  KILL WORKER
 End if
 ```
 
-Calls are synchronous with a 30-second process timeout. Success preserves
-`{ok:true,stdout,stderr,exitCode:0,value}`. Failure has `ok:false`,
-`error:{code,message{,details}}`; process output/status are retained when
-available, while prelaunch errors do not invent an exit code.
-Missing executable, unsupported target/platform, invalid argument, launch
-failure, abnormal termination, nonzero CLI status and malformed protocol are
-explicit. Nonempty stderr alone is not failure. No PATH fallback, runtime
-download, unchecked chmod or global host error handler.
+Implement logging/UI handling in the comments before using this demo in production.
+For a complete bounded-log demo, import the two methods from
+[examples/](examples/), then dispatch `start`, `write` (Blob third parameter)
+and `shutdown` to the same worker. Events, including base64 binary chunks, are
+written to `SerialPort-demo.json` in 4D's temporary folder; errors are forwarded
+to the main process. The demo fixes 9600/8N1/no flow control: change those settings
+only to equipment-approved values.
+Use `CALL WORKER("My serial owner"; "Serial_demo"; "shutdown"; "")` to release
+all ports. Wait for `terminated` before disposing the owner. Do not copy the
+live session across workers or retain transient pointers in formulas.
+The real runnable harness methods under `tests/host/` demonstrate complete
+callback correlation, negative replies, owner return and clean shutdown.
 
-### CLI contract
+## Binary I/O and IPC
 
-UTF-8, exactly one JSON line, LF on both systems, protocol version 1:
-
-| Invocation | Status / stdout / stderr |
-| --- | --- |
-| `hello-cli greet --name "4D"` | 0 / `{"protocol":1,"message":"Hello, 4D!"}` + LF / empty |
-| `hello-cli --version` | 0 / `{"protocol":1,"version":"0.1.0"}` + LF / empty |
-| Invalid/unknown/missing/duplicate args, empty or malformed UTF-8 name | 2 / empty / error JSON below + LF |
+`serial-port serve` accepts UTF-8 JSON lines on stdin and emits flushed ASCII
+JSON lines on stdout. Diagnostics use stderr only. JSON escapes preserve Text;
+base64 preserves all bytes, including NUL and non-UTF-8 data.
 
 ```json
-{"protocol":1,"error":{"code":"invalid_arguments","message":"expected greet --name <non-empty UTF-8 name> or --version"}}
+{"protocol":1,"id":"1","op":"list"}
+{"protocol":1,"id":"2","op":"open","path":"/dev/cu.device","config":{"baudRate":9600,"dataBits":8,"stopBits":"one","parity":"none","flowControl":"none"}}
+{"protocol":1,"id":"3","op":"write","connection":"c1","data":"AP+A","timeoutMs":1000}
+{"protocol":1,"id":"4","op":"cancel","requestId":"3"}
+{"protocol":1,"id":"5","op":"close","connection":"c1"}
+{"protocol":1,"id":"6","op":"shutdown"}
 ```
 
-No shell is used. `4D.SystemWorker.new` takes **command-line Text**, not argv
-Collection. Each literal argument/path is quoted; File/Folder virtual Resources
-paths are expanded with actual 4D APIs. stdin closes immediately. UTF-8 names,
-spaces, quotes, backslashes, newlines and metacharacters are data. Windows CRT
-and 4D macOS parsing require real native round-trip checks, not shell tests.
-Add an explicit Blob mode if your future feature returns binary output.
+Responses are `{protocol:1,id,ok:true,result:Object}` or
+`{protocol:1,id,ok:false,error:{code,message,...}}`. Connection IDs are stable
+for the life of that connection and not shared across sessions.
+Events include `data` with `connection`/base64 `data`, `error`, `disconnected`
+and `session_limit`. The 4D facade adds decoded Blob `bytes` and local
+`diagnostic`/`terminated` events. `configure` accepts a connection and config.
+The exact native [protocol contract](cli/PROTOCOL.md) defines validation bounds,
+queue limits, cancellation side effects and disconnect behavior.
+Serial writes are full serialized operations; timeout/cancel can mean a prefix
+already reached the device. Never assume atomic wire transmission or blindly
+retry a partial operation. Cancel/timeout closes the affected connection and
+cancels all its queued writes. Inspect error `transferred` counts.
 
-## Install after release
+Limits: 65536-byte IPC frame, 32768 decoded bytes/write, 16 open ports,
+128 pending requests, 256 KiB queued writes/port. Oversized input, invalid
+configuration, invalid base64, queue overflow and unknown IDs are explicit
+errors. Arbitrarily fragmented/coalesced stdin/stdout is reassembled by LF,
+not by callback boundaries. The helper bounds output queues and ends rather
+than accumulating indefinitely behind a stalled reader: its 256 KiB output
+queue has a two-second stall deadline; overflow/broken output exits 3 with
+`output_failed` diagnostics. Ingress holds at most 128 frames before applying
+pipe backpressure. Configure failure (even invalid configuration) and per-port
+write queue overflow close the connection; settings are not transactional.
+Parent liveness is monitored independently of stdin EOF every 250 ms:
+POSIX reparent detection, or a retained Windows parent process handle.
+Watcher setup/wait failures report `parent_watch_failed` rather than silently
+waiving cleanup. The macOS test deliberately retains a stdin writer after
+parent death and verifies helper termination and serial port release.
 
-These instructions install the **CLI-backed component and its bundled executable**,
-not a native 4D plug-in. Component packaging and Dependency manager installation
-do not install a plug-in in the host or satisfy that separate requirement.
+SystemWorker's response memory is accumulated internally: sessions deliberately
+end at **8 MiB protocol output or one hour**, with explicit session-limit
+notification. No silent restart/reconnect. The caller must deliberately create
+a new session and reopen ports. EOF/shutdown releases serial ports and pending
+operations. Closing/cancelling may invalidate a connection; inspect events and
+write error details before retrying.
 
-In the host's Dependency manager add **GitHub** dependency `OWNER/REPOSITORY`
-and choose the released tag/version. The asset must be exactly `REPOSITORY.zip`.
-Alternatively declare in the host's `Project/Sources/dependencies.json`:
+Data callbacks are **byte chunks, not device protocol messages**. This first
+prototype prioritizes Blob correctness and has no streaming text decoder.
+Keep encoding/decoder state per connection yourself; do not independently
+decode chunks that may split a multibyte character. No global `USE CHARACTER SET`.
 
-```json
-{
-  "version": 2100,
-  "dependencies": {
-    "hello-tools": {"github": "OWNER/hello-tools", "tag": "v0.1.0"}
-  }
-}
-```
+## Scope and hardware placement
 
-Reload the host and use your namespace. Manual installation: unzip and copy
-`REPOSITORY.4dbase` into the host's `Components/` folder.
-Local source dependencies point at the component package root, not the anchor.
-`tests/host/environment4d.json` documents this mapping; automated runtime checks
-install an isolated copy under `Components/` to test actual component loading.
+Multiple devices can be open simultaneously. OS/driver errors and unexpected
+disconnects are surfaced; no automatic reconnection. Port enumeration is
+platform-specific, because Asio does not enumerate ports. Bluetooth Classic
+works only if the OS already exposes a serial port. BLE, pairing/discovery,
+direct Bluetooth, special RS485 direction control and real-time guarantees
+are excluded. Opening a port may toggle driver/device control signals; validate
+your actual equipment before industrial deployment.
 
-## Build, validate and release
+Hardware is local to the process running the helper. On 4D Server this means
+**server-local ports**, not a client's USB device. Run the component on the
+client when client-local hardware is intended.
 
-For read-only JSON configuration/platform/tool inspection and local orchestration:
+## Build and validation
+
+Read [AGENTS.md](AGENTS.md) before changing identity, architecture or delivery.
+Initialization is complete and retains only C++. CMake pins header dependencies
+with SHA256; bundled notices live in
+`component/SerialPort/Resources/licenses/`. Retain template MIT attribution
+and dependency/runtime redistribution notices. Vendor tool4d is never bundled.
 
 ```sh
 python3 scripts/doctor.py --root .
-python3 scripts/doctor.py --root . --tool4d /path/to/tool4d
-python3 scripts/accept_local.py --root . --repository OWNER/REPOSITORY \
-  --tool4d /path/to/tool4d
-```
-
-Read the scripts' `--help` and [AGENTS.md](AGENTS.md) for prerequisites/stages.
-`accept_local.py` invokes existing builds/assembly/source-host/compile/pack and
-compiled-host checks, records `build/acceptance.json` and, when packing succeeds,
-produces `dist/REPOSITORY.zip`. Optional `--cross` produces nonnative **Go-only**
-artifacts; Rust/C++ cross mode is explicitly unsupported. Cross-building is not
-native execution evidence. Report `not_run` separately from `passed`: even a
-successful Apple Silicon compiled-host run is not full release readiness.
-With `--cross` on Apple Silicon, Intel CLI vectors may also run through available
-Rosetta, recorded separately from native execution. Report the actual local
-toolchain (Go 1.25.1 observed), not the CI pin (Go 1.26.10).
-
-For **Go on native macOS**, the explicit three-target artifact example is:
-
-```sh
-python3 scripts/accept_local.py --root . --repository OWNER/REPOSITORY \
-  --tool4d /path/to/tool4d --cross
-```
-
-Without `--cross`, assembly still needs current artifacts and
-`build-manifest.json` files for **all three targets**. For Rust/C++, restore
-executables/manifests from same-commit native CI into `build/<target>/`; unsupported
-cross mode is not a substitute. Manifests bind source/config/package inputs,
-Git commit and binary hash; assembly rejects missing/stale/mixed artifacts.
-Acceptance uses strict `passed` / `failed` / `not_run` statuses and separate
-CLI build, native CLI test and Rosetta steps. Source/compiled host evidence is
-preserved in `build/source-host-status.json` and `build/compiled-host-status.json`,
-alongside `build/compile-status.json` and `build/acceptance.json`.
-Successful local completion still reports `result:"partial"`,
-`finished:true`, `release_ready:false`; failures save unfinished failed evidence.
-macOS system-library checks do not inspect Windows native DLL/runtime dependencies.
-The stable final pair is `dist/REPOSITORY.zip` and
-`dist/REPOSITORY.acceptance.json` (ZIP SHA256, actual tool versions and embedded
-host evidence). Copy both before disposing of a temporary worktree. The latest
-attempt, including failures, remains in `build/acceptance.json`.
-
-```sh
 python3 -m unittest discover -s tests -v
 python3 scripts/generate_icons.py --check
-python3 scripts/build_cli.py --target macos-arm64
+python3 scripts/build_cli.py --root . --target macos-arm64
 ```
 
-Use your native target: `macos-x64`, `macos-arm64`, `windows-x64`.
-CI builds/tests only the selected language in native hosted jobs, uploads
-same-commit binaries and combines macOS slices using `lipo`.
-CI executable artifacts are **not compiled component releases**.
-The correct architecture verification order is
-`lipo <universal-file> -verify_arch x86_64 arm64`; do not put the filename after
-the architecture list or mix resources from different source revisions.
+Use the actual native target (`macos-arm64`, `macos-x64`, `windows-x64`).
+The native CMake tests exercise actual Asio serial I/O through pseudoterminals
+on macOS; portable protocol tests run on Windows. Existing CI builds each native
+target, checks protocol vectors and binds binaries to input hashes/manifests.
+No C++ cross-build shortcut or mixed-revision artifacts.
 
-### Real 4D tooling and configuration
-
-[tool4d](https://developer.4d.com/docs/20/Admin/cli#tool4d) is the official **free
-standalone headless tool** used by the reference component pipelines. This flow
-does not require a license/serial secret. Full IDE, Server and merged applications
-have separate vendor licensing. Never bundle tool4d into the MIT component.
-
-Hosted configuration belongs in the **generated repository** under
-**Settings → Secrets and variables → Actions → Variables → New repository variable**,
-separate from the seven private secrets documented below. Template creation
-does not inherit these variables. Only the hosted 4D opt-in is required; the
-approved public compiler pin is already in `package.json.tool`.
-
-| Variable | Value |
-| --- | --- |
-| `FOURD_ENABLED` | `true` to enable vendor tool download/use; mandatory for release |
-| `TOOL4D_URL` | Optional paired override: `https://resources-download.4d.com/release/20.x/20.7/101905/mac/tool4d_arm64.tar.xz` (observed macOS ARM64 build) |
-| `TOOL4D_SHA256` | Optional paired override: `40a5d177a4f73165f52abf6ec8000249d81411c41353ccf258cece8e74639261`; verify the approved archive hash out of band |
-
-Supply URL/hash overrides together or neither; incomplete pairs fail.
-GitHub automatically supplies `GITHUB_TOKEN`, and only the publish job receives
-`contents: write`. Do not register it or a personal token as another secret.
-None of these variables or the automatic token enables signing.
-
-Reference URL form:
-`https://resources-download.4d.com/release/20.x/20.7/BUILD/mac/tool4d_arm64.tar.xz`.
-`latest` is discovery-only/mutable and rejected by the downloader; checksum
-mismatch fails. The fixed **20.7 build 101905** archive was downloaded and used
-locally, SHA256
-`40a5d177a4f73165f52abf6ec8000249d81411c41353ccf258cece8e74639261`.
-The pin is public versioned metadata in `package.json.tool`, not a credential.
-This archive is macOS ARM64 only, not a native Intel/Windows runtime.
-Local download checks native host compatibility plus safe extraction:
+For local source integration, copy the **native** freshly built helper into
+`component/SerialPort/Resources/bin/macOS/serial-port` (Windows:
+`bin/Windows/serial-port.exe`), then run the real host harness. This native-only
+development resource is not a universal/release artifact.
 
 ```sh
-python3 scripts/ci_config.py download-tool4d
+python3 scripts/test_4d.py --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
+python3 scripts/compile_component.py --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
 ```
 
-No URL/hash variables are needed for that default. A complete explicit CLI pair
-overrides a complete environment-variable pair, which overrides the manifest.
-For an approved alternate pin only:
+Full packaging requires all three same-source native binaries/manifests:
 
 ```sh
-python3 scripts/ci_config.py download-tool4d --root . \
-  --url https://resources-download.4d.com/release/20.x/20.7/101905/mac/tool4d_arm64.tar.xz \
-  --sha256 40a5d177a4f73165f52abf6ec8000249d81411c41353ccf258cece8e74639261
+python3 scripts/ci_config.py assemble
+python3 scripts/accept_local.py --repository miyako/SerialPort \
+  --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
 ```
 
-No imagined setup action or unpinned external compiler is used.
+The inherited assembly/packer refuses missing, stale or mixed artifacts.
+It strips source, verifies real compiler output, unpacks the final ZIP and
+requires actual compiled host loading. **A native helper/source-host pass is
+not compiled-package acceptance or release readiness.** The follow-up milestone
+authorizes a prototype branch/PR and GitHub Actions validation, not merging,
+tags, release publication or signing.
+Existing CI/release patterns remain unsigned; optional hosted 4D is controlled
+by `FOURD_ENABLED`. The fixed downloader fails closed if its approved origin
+policy rejects a redirect. The downloader validates every redirect hop against
+the exact HTTPS vendor hosts `resources-download.4d.com` and `builds2.4d.com`,
+with bounded redirects, unchanged pinned SHA256 and safe extraction. It never
+falls back to `latest` or an unpinned replacement.
 
-```sh
-python3 scripts/test_4d.py --tool4d /path/to/tool4d
-python3 scripts/compile_component.py --tool4d /path/to/tool4d
-python3 scripts/package_component.py --repository OWNER/REPOSITORY \
-  --tag v0.1.0 --unpack-test
-python3 scripts/test_4d.py --tool4d /path/to/tool4d \
-  --component build/release-test/REPOSITORY.4dbase
-```
+## CI artifacts (not releases)
 
-The driver runs real `Compile project` for `x86_64_generic` and
-`arm64_macOS_lib`, requiring a **fresh successful JSON result**. Errors or absent
-results fail even when tool4d exits zero. It cleans generated DerivedData before
-recompile (stale compiled projects can otherwise be treated as sourceless).
-Native Libraries and CompiledCode are required, not source-shaped substitutes.
-The compile marker binds inputs with `input_sha256` and generated
-DerivedData/Libraries with `output_sha256`, rejecting changed outputs at packaging.
+With the public Actions variable `FOURD_ENABLED=true`, branch/PR CI builds
+and tests native macOS Intel, macOS ARM64 and Windows x64 helpers, verifies
+same-commit/source manifests, assembles universal macOS resources, and uses
+the pinned free tool4d for source, compilation and unpacked compiled-host checks.
+Only after all package gates pass does it upload **SerialPort-compiled-component**,
+containing `SerialPort.zip` and its SHA256-bound `SerialPort.acceptance.json`.
+Artifacts are retained for 14 days; failed runs retain diagnostic reports but
+do not upload a success-shaped compiled package.
 
-Align `template.json.version`, `package.json.version` and the CLI version,
-commit and push `v<version>`, e.g. `v0.1.0`. Release builds all CLI targets from
-that same tag, compiles after Resources assembly, packs `REPOSITORY.zip`,
-and **loads the unpacked compiled package in a real 4D host before publishing**.
-Uninitialized/misnamed projects, missing tool/binary/library, failed compile or
-failed host test fail closed. Only the publish job receives `contents:write`
-through built-in `GITHUB_TOKEN`; no personal token/version-bot commit needed.
+Download that Actions artifact, extract its `SerialPort.zip`, then unzip the
+component ZIP to obtain `SerialPort.4dbase` for a host's `Components/` folder.
+This is unsigned development distribution, not a tagged release or a
+Dependency-manager download/install acceptance check. No tag, release or merge
+is created by the validation workflow. Follow the run/evidence links in the PR
+for the exact accepted revision; an older artifact does not approve later code.
 
-```text
-REPOSITORY.zip
-  REPOSITORY.4dbase/
-    REPOSITORY.4DZ                     standard ZIP: Project metadata + CompiledCode
-    Libraries/lib4d-arm64.dylib        OUTSIDE .4DZ
-    Resources/bin/macOS/CLI            universal, executable ZIP mode
-    Resources/bin/Windows/CLI.exe      x64
-    Resources/licenses/LICENSE        redistribution notice included
-    Resources/logo.* + en.lproj/...
-    Documentation/Classes/...
-```
+Native CLI test success does not prove native Windows/Intel **4D host loading**
+or physical-device behavior. The available actual compiled-host gate is macOS
+ARM64. Acceptance therefore remains `result:"partial"`, `finished:true`,
+`release_ready:false`; signing/notarization and hardware checks remain separate.
 
-Packed `.4DZ` excludes `.4dm` Classes/Methods source. ZIP order/timestamps/modes
-are deterministic; serviced native compiler outputs need not be bit-identical.
-Explicit nested directory ZIP records are required: omitting them caused a real
-tool4d compiled-component loader crash, despite producing a generally valid ZIP.
-`Libraries/` here contains compiler-generated component support, not a private
-4D plug-in backend. Bundling CLI dependencies does not authorize component-private
-plug-in loading or replace host plug-in installation.
+## Hardware acceptance
 
-### Run workflows manually
+Supply two actual OS port paths. Open both with equipment-approved settings,
+send known binary vectors containing `00`, `80`, `FF`, and bytes split across
+device frames, verify byte-for-byte replies and ID isolation, exercise
+write timeout/cancel, then physically unplug one device while the other remains
+active. Verify explicit disconnect/error, no reconnect, close/shutdown and
+immediate ability to reopen released ports. Check driver/control-line behavior.
 
-After this workflow version is merged to the **default branch**, open
-**Actions → CI → Run workflow** and choose a branch for validation.
-Hosted 4D remains opt-in through `FOURD_ENABLED`; a CLI-only green run does not
-prove compilation or host loading.
+Pseudoterminal disconnect is **not physical USB unplug evidence**. Windows
+native/4D, actual hardware/Bluetooth, compiled ZIP loading, dependency-manager
+installation and signing must be reported separately as `not_run` until actually
+executed. Partial local acceptance remains **NOT release ready**.
 
-**Actions → Release compiled component → Run workflow** requires `version_tag`:
-an **existing** `v<SemVer>` tag matching the initialized component version.
-It does not create a tag. The gate resolves the tag to a commit SHA, then every
-native build, assembly, compilation and publication job uses that exact SHA,
-not the UI-selected branch. Version/repository/4D gates and final unpacked
-compiled-host acceptance are mandatory. Before publication the tag is refreshed
-and checked against that SHA, then `gh release create --verify-tag` is used.
-Do not dispatch publication or create tags without approval. Merely opening
-this PR does not make the new **Run workflow** button available in the default
-template; the workflow file must first merge.
+## Initial local evidence: 2026-11-05
 
-### Optional signing/notarization
+This initial snapshot was **uncommitted**, based on
+`e400910a9a295de2ee7dc6c42aa4d10d4982828a`, before the subsequently approved
+branch/PR and cross-platform CI milestone. Native CLI input SHA256:
+`1b724d4662c2dba706ecacd22c9d232863af92596512d74442d49eb935a659ee`.
 
-**Registering Apple secrets does not enable signing.** The current
-`.github/workflows/release.yml` creates an **unsigned** component and does not
-consume any of the seven secrets below. They are credentials for a future,
-explicitly implemented opt-in signing/notarization workflow, not prerequisites
-for the free local tool4d compiler or this unsigned release workflow.
+| Check | Status | Observed scope |
+| --- | --- | --- |
+| Full Python suite | `passed` | 135 tests, 19 intentional template/platform skips |
+| Icons | `passed` | Existing deterministic icon check |
+| macOS ARM64 helper | `passed` | Native CMake/Apple clang 21.0.0; 26 protocol/PTY tests plus four CLI tests |
+| Actual serial engine | `passed` | macOS pseudoterminals: binary bytes, two ports, timeout/cancel, overflow, disconnect, EOF/shutdown and retained-stdin parent death |
+| Source 4D host | `passed` | tool4d 20.7/build 101905, owner return, six correlated replies, negative paths, binary write submission, Blob parsing and shutdown |
+| Real 4D compilation | `passed` | `x86_64_generic` and `arm64_macOS_lib`; not native Intel host execution |
+| Universal/release assembly | `failed` | Missing same-source native Intel and Windows artifacts/manifests |
+| Final compiled ZIP/host | `not_run` | No release ZIP produced; assembly gate preserved |
+| Native Intel CLI/4D | `not_run` | Native runtime/build unavailable locally |
+| Windows x64 CLI/4D | `not_run` | Existing native CI/CTest wiring retained, not dispatched |
+| Physical USB/Bluetooth/unplug | `not_run` | No physical serial hardware acceptance performed |
+| Dependency-manager install/signing | `not_run` | No publication; unsigned development only |
 
-In the **newly generated repository**, register private credentials under
-**Settings → Secrets and variables → Actions → Secrets → New repository secret**.
-GitHub's **Use this template does not inherit secrets or repository variables**.
-Never put credentials, exported certificates, private keys or account passwords
-in source, `package.json`, workflow YAML, logs or a pull request.
+The 4D fragmented/coalesced Blob checks use explicit parser fixtures; they are
+not physical serial I/O evidence. Actual serial engine evidence comes from
+the native PTY tests. The real source host launches the final bundled helper
+and exercises its asynchronous protocol; it does not open a physical device.
+The one-hour lifetime deadline has not been waited out in a test.
 
-| Repository Actions secret | Exact value/type |
-| --- | --- |
-| `APPLE_DEVELOPER_ID_CERTIFICATE` | Base64 encoding of an exported **Developer ID Application `.p12` containing the private key**, not just a public `.cer`, PEM certificate or its filename. Export the signing identity and private key together from Keychain Access. |
-| `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD` | The password chosen when exporting that `.p12`; not the Apple Account password or temporary keychain password. |
-| `KEYCHAIN_PASSWORD` | An arbitrary strong, randomly generated password for the workflow's temporary keychain. It need not match any account password. |
-| `NOTARYTOOL_APPLE_ID` | The Apple Account **email address** authorized to notarize for the Developer team. |
-| `NOTARYTOOL_TEAM_ID` | The Apple Developer **Team ID** associated with the signing identity and notarization account. |
-| `NOTARYTOOL_PASSWORD` | An Apple **app-specific password** generated for notarization; **not** the ordinary Apple Account login password. |
-| `CODESIGN_APPLE_ID` | Despite its misleading name, the full **Developer ID Application signing identity**, e.g. `Developer ID Application: Organization (TEAMID)`, or the certificate's SHA-1 identity fingerprint. **Not an email address.** |
+Commands: `python3 -m unittest discover -s tests -v`,
+`python3 scripts/generate_icons.py --check`,
+`python3 scripts/build_cli.py --root . --target macos-arm64`,
+`python3 scripts/test_4d.py --root . --tool4d .tools/tool4d.app/Contents/MacOS/tool4d`,
+`python3 scripts/compile_component.py --root . --tool4d .tools/tool4d.app/Contents/MacOS/tool4d`.
+`otool -L build/macos-arm64/serial-port` shows only system libc++/libSystem.
+Windows DLL/static-CRT redistribution and hardware behavior still require
+native acceptance; notice presence is not a legal audit.
 
-Keep public build configuration separate under **Actions → Variables**:
-`FOURD_ENABLED=true` is the intentional hosted 4D opt-in. The approved public
-tool4d build and archive SHA256 are already pinned in `package.json.tool`;
-`TOOL4D_URL` and `TOOL4D_SHA256` are **optional paired overrides**, not required
-secrets. Supply both or neither; incomplete/invalid overrides fail.
-GitHub supplies `GITHUB_TOKEN` automatically; only the publish job grants it
-`contents: write`. Do not register a personal token for this workflow.
+The final native development executable is `build/macos-arm64/serial-port`,
+also copied into the component's native-only development Resources. SHA256:
+`f39d50483a9398c2e9a17d1d72f220220ac2c2c15d9b8906c19646246e2a5c54`.
+Adjacent `build-manifest.json` binds its source input and binary hashes.
+`build/source-host-status.json`, `build/compile-status.json`,
+`build/python-tests.log` and `build/source-host-run.log` retain local evidence.
 
-Signing is **not required** by this unsigned build/release pipeline. PDF references
-sign macOS distributions; their release policy is not an intrinsic 4D requirement.
-Windows Authenticode and Apple notarization are not configured here.
-
-For production, explicitly add opt-in signing before final package validation:
-certificate/password, ephemeral keychain password, identity and notarization
-credentials in Actions **secrets only**; minimum entitlements; fail each codesign
-error; require notarization JSON `Accepted`; clean temporary keychain in
-`always()`; retest the final signed package. Bare CLI executables cannot be
-stapled. Stapling a signed container and Apple's recommended `Contents/` component
-layout require deliberate packaging changes. Never `continue-on-error` signing.
-Gatekeeper/quarantine can block unsigned downloaded executables; no runtime
-trust bypass is supplied.
-
-## Icons
-
-Original `assets/icon-source.svg` is rendered to a **real 1024×1024 RGBA PNG**.
-Resources `logo.svg` is a reference-style **64×64 SVG embedding a PNG data URI**
-whose decoded bytes equal `logo.png`. The convention is **PNG-in-SVG**, not the
-reverse (verified across all three inspirations).
-
-```sh
-python3 scripts/generate_icons.py
-python3 scripts/generate_icons.py --check
-```
-
-Regenerate both icons together. The dependency-free renderer supports this
-original rectangle/polygon artwork; unsupported elements fail explicitly.
-Use a pinned real SVG rasterizer for richer artwork, never rename SVG to PNG.
-
-## Remarks and validation limitations
-
-No PDF settings/algorithms, tables/authentication schema, async queue, network
-installer or external PATH search. Generic helpers are internal-by-convention.
-Implement cancellation/streaming explicitly for features needing more than the
-finite synchronous timeout.
-
-Local Apple Silicon validation covers all three CLI starters, initialization,
-icon/package invariants, actual free tool4d compilation and namespaced host
-calls against both source and the unpacked source-stripped release artifact,
-including `Is compiled mode = True`. Hosted Windows/macOS Intel, Windows **4D** quoting, dependency-manager
-download from a new release, and signing are separate observations; Python or
-CLI tests alone do not prove them. See PR results for exact observed checks.
-
-## Licensing and provenance
-
-New scaffold, CLI starters, tests and original icon are **MIT**: [LICENSE](LICENSE).
-Keep its copyright/license in redistributed source/binary assets. Future bundled
-tools, libraries and static dependencies carry their own upstream license/NOTICE
-obligations: include notices in `component/<name>/Resources/licenses/`.
-4D/tool4d are separately licensed vendor tools, not MIT dependencies.
-Initialization copies the selected Go BSD or Rust MIT runtime notice from
-`cli-starters/<language>/licenses/` into packaged `Resources/licenses/`;
-packing rejects a missing baseline notice. This does **not** audit added
-dependencies or all runtime exceptions. Review Rust's release
-`COPYRIGHT-library.html` for applicable standard-library third-party notices,
-and Microsoft static-CRT redistribution terms for Windows C++ builds.
-System dylibs are not bundled by default. Recheck notices when changing
-toolchains, dependencies or linked runtime code.
-
-Conventions were verified from
-[pdfdistill-pdfcpu](https://github.com/miyako/pdfdistill-pdfcpu),
-[pdfdistill-qpdf](https://github.com/miyako/pdfdistill-qpdf),
-[pdfdistill-lopdf](https://github.com/miyako/pdfdistill-lopdf)
-(MIT, 2026 Keisuke Miyako), and
-[4d-class-compiler](https://github.com/miyako/4d-class-compiler)
-(MIT, 2022 Keisuke Miyako). No feature algorithms, binaries or artwork were copied.
-[4d-plugin-tutorial](https://github.com/miyako/4d-plugin-tutorial) inspired the
-agent-driven tutorial UX; this is a component/standalone CLI, not its native
-plug-in SDK/code. That tutorial is a separate host-installed plug-in architecture,
-not guidance for adding a private plug-in backend to this component.
-Official references:
-[dependency naming](https://developer.4d.com/docs/Project/components),
-[Compile project](https://developer.4d.com/docs/commands/compile-project),
-[SystemWorker](https://developer.4d.com/docs/API/SystemWorkerClass) and
-[error handling](https://developer.4d.com/docs/20/Concepts/error-handling).
+`python3 scripts/accept_local.py --root . --repository miyako/SerialPort --tool4d .tools/tool4d.app/Contents/MacOS/tool4d`
+records the mandatory assembly failure in `build/acceptance.json` with
+`result:"failed"`, `finished:false`, `release_ready:false`. Its downstream
+host/compile/package rows remain `not_run` for that blocked orchestration
+attempt; the separately executed source/compile reports above are distinct
+evidence. **No `dist/SerialPort.zip` or ZIP SHA256 is claimed.**
