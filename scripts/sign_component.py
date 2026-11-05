@@ -53,6 +53,48 @@ STEPS = (
 class SigningError(ValueError):
     """Only fixed, credential-free diagnostics may cross the command boundary."""
 
+    def __init__(self, message, *, diagnostic=None):
+        super().__init__(message)
+        self.diagnostic = diagnostic
+
+
+def codesign_failure(arguments, result):
+    operation = next((name for flag, name in (
+        ("--verify", "verify"), ("--display", "display"), ("-d", "display"),
+        ("--sign", "sign"), ("-s", "sign")) if flag in arguments), "other")
+    stderr = result.stderr if isinstance(result.stderr, str) else ""
+    lowered = stderr.lower()
+    categories = (
+        ("certificate_chain_unavailable", ("unable to build chain", "unable to build certificate chain")),
+        ("keychain_interaction_denied", ("user interaction is not allowed", "errsecinteractionnotallowed",
+                                          "interaction with the security server is not allowed", "authorization denied")),
+        ("keychain_internal_component", ("errsecinternalcomponent",)),
+        ("requirement_failed", ("does not satisfy specified requirement", "failed to satisfy specified requirement",
+                                "requirement failed", "code failed to satisfy specified code requirement")),
+        ("timestamp_service_unavailable", ("timestamp service is not available", "timestamp server",
+                                           "timestamp service unavailable", "a timestamp was expected but was not found")),
+        ("signing_identity_unavailable", ("no identity found", "no signing identity", "identity not found",
+                                          "the specified item could not be found in the keychain")),
+        ("invalid_signature_or_format", ("invalid signature", "code or signature have been modified",
+                                         "invalid or unsupported format", "bundle format unrecognized",
+                                         "code object is not signed at all", "unsealed contents present")),
+        ("usage_syntax", ("usage: codesign", "unrecognized option", "invalid option",
+                          "option requires an argument", "ambiguous option")),
+        ("forbidden_metadata", ("resource fork, finder information, or similar detritus not allowed",)),
+        ("file_access_denied", ("permission denied", "operation not permitted")),
+    )
+    category = next((name for name, patterns in categories
+                     if any(pattern in lowered for pattern in patterns)), "unknown")
+    diagnostic = {"program": "codesign", "operation": operation, "category": category,
+                  "exit_code": result.returncode}
+    if category == "unknown":
+        diagnostic["stderr_sha256"] = hashlib.sha256(stderr.encode("utf-8")).hexdigest()
+    message = ("codesign exited with status " + str(result.returncode) +
+               " (operation=" + operation + "; category=" + category)
+    if "stderr_sha256" in diagnostic:
+        message += "; stderr_sha256=" + diagnostic["stderr_sha256"]
+    return SigningError(message + ")", diagnostic=diagnostic)
+
 
 def safe_path(path):
     path = Path(os.path.abspath(path))
@@ -73,6 +115,8 @@ def run(arguments, *, timeout=120):
     except Exception:
         raise SigningError(label + " execution failed") from None
     if result.returncode:
+        if label == "codesign":
+            raise codesign_failure(arguments, result) from None
         raise SigningError(label + " exited with status " + str(result.returncode)) from None
     return result
 
@@ -586,6 +630,8 @@ def step(report, output, name, action):
         value = action()
     except SigningError as error:
         report["steps"][name]["reason"] = str(error)
+        if error.diagnostic is not None:
+            report["steps"][name]["failure"] = error.diagnostic
         save_report(output, report)
         raise
     report["steps"][name] = {"status": "passed"}

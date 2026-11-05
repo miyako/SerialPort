@@ -737,6 +737,59 @@ class SigningTests(unittest.TestCase):
         commands = [call.args[0] for call in mock.call_args_list]
         self.assertFalse(any("create-keychain" in command or "import" in command for command in commands))
 
+    def test_codesign_failure_reports_only_fixed_operation_category_and_exit_code(self):
+        examples = (
+            ("errSecInternalComponent", "keychain_internal_component"),
+            ("unable to build chain to self-signed root; errSecInternalComponent", "certificate_chain_unavailable"),
+            ("code failed to satisfy specified code requirement(s)", "requirement_failed"),
+            ("The timestamp service is not available", "timestamp_service_unavailable"),
+            ("no identity found", "signing_identity_unavailable"),
+            ("User interaction is not allowed", "keychain_interaction_denied"),
+            ("code or signature have been modified", "invalid_signature_or_format"),
+            ("Usage: codesign ...", "usage_syntax"),
+        )
+        private = "PRIVATE-IDENTITY-TEAM-PASSWORD-STDERR"
+        for flag, operation in (("--sign", "sign"), ("--verify", "verify"), ("--display", "display")):
+            for stderr, category in examples:
+                result = subprocess.CompletedProcess([], 1, private, stderr + "\n" + private)
+                with self.subTest(operation=operation, category=category), patch.object(
+                        signing.subprocess, "run", return_value=result):
+                    with self.assertRaises(signing.SigningError) as error:
+                        signing.run(["/usr/bin/codesign", flag, private])
+                diagnostic = error.exception.diagnostic
+                self.assertEqual(diagnostic, {"program": "codesign", "operation": operation,
+                                              "category": category, "exit_code": 1})
+                self.assertNotIn(private, str(error.exception) + json.dumps(diagnostic))
+                self.assertTrue(error.exception.__suppress_context__)
+
+    def test_unknown_codesign_failure_records_stderr_digest_never_text(self):
+        private = "PRIVATE-UNKNOWN-STDERR"
+        result = subprocess.CompletedProcess([], 7, "PRIVATE-STDOUT", private)
+        with patch.object(signing.subprocess, "run", return_value=result):
+            with self.assertRaises(signing.SigningError) as error:
+                signing.run(["/usr/bin/codesign", "--verify", "PRIVATE-PATH"])
+        diagnostic = error.exception.diagnostic
+        self.assertEqual(diagnostic["operation"], "verify")
+        self.assertEqual(diagnostic["category"], "unknown")
+        self.assertEqual(diagnostic["exit_code"], 7)
+        self.assertEqual(diagnostic["stderr_sha256"], signing.hashlib.sha256(private.encode()).hexdigest())
+        self.assertNotIn(private, str(error.exception) + json.dumps(diagnostic))
+        self.assertNotIn("PRIVATE-STDOUT", str(error.exception))
+        self.assertNotIn("PRIVATE-PATH", str(error.exception))
+
+    def test_codesign_diagnostic_is_persisted_at_the_actual_failing_phase(self):
+        report = {"steps": {}}
+        output = self.root / "build/signing-status.json"
+        result = subprocess.CompletedProcess([], 1, "", "PRIVATE-KEYCHAIN: errSecInternalComponent")
+        with patch.object(signing.subprocess, "run", return_value=result):
+            with self.assertRaises(signing.SigningError):
+                signing.step(report, output, "sign_cli", lambda: signing.run(
+                    ["/usr/bin/codesign", "--sign", "PRIVATE-IDENTITY", "PRIVATE-FILE"]))
+        saved = json.loads(output.read_text())
+        self.assertEqual(saved["steps"]["sign_cli"]["failure"], {
+            "program": "codesign", "operation": "sign", "category": "keychain_internal_component", "exit_code": 1})
+        self.assertNotIn("PRIVATE", output.read_text())
+
 
 if __name__ == "__main__":
     unittest.main()
