@@ -142,3 +142,7 @@ CTest runs the native harness unbuffered and verbose with a 120-second suite
 timeout. The harness dumps Python thread stacks after 60 seconds, and pipe/PTY
 test writes and POSIX test reads have individual deadlines. A shutdown-ingress
 backpressure regression covers condition-variable wakeup and helper teardown.
+The native `serial-shutdown` CTest deterministically queues successful expired
+watchdog/parent timer completions behind shutdown. Timer cancellation cannot
+abort an already queued successful completion; callbacks check shutdown before
+rearming so the event loop drains and exits even in that ordering.

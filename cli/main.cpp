@@ -119,6 +119,9 @@ J ports() {
 
 // Only the engine thread touches ports/requests. Pipe threads use bounded queues.
 class Server {
+#ifdef SERIAL_PORT_TESTING
+    friend struct ServerShutdownTest;
+#endif
     struct Write {
         std::string id;
         std::vector<unsigned char> data;
@@ -421,9 +424,10 @@ class Server {
         }
     }
     void watch() {
+        if (stopping) return;
         watchdog.expires_after(std::chrono::milliseconds(50));
         watchdog.async_wait([this](asio::error_code ec) {
-            if (ec) return;
+            if (ec || stopping) return;
             const auto started = writer_started.load();
             if (pipe_failed || (started != 0 && now() - started > 2000)) {
                 pipe_failed = true; stop(3);
@@ -457,9 +461,10 @@ class Server {
 #endif
     }
     void watch_parent() {
+        if (stopping) return;
         parent_timer.expires_after(std::chrono::milliseconds(250));
         parent_timer.async_wait([this](asio::error_code ec) {
-            if (ec) return;
+            if (ec || stopping) return;
 #ifdef _WIN32
             DWORD state = WaitForSingleObject(parent_handle, 0);
             if (state == WAIT_OBJECT_0) { stop(); return; }
@@ -491,7 +496,7 @@ public:
         }
         signals.async_wait([this](asio::error_code ec, int) { if (!ec) stop(); });
         lifetime.expires_after(std::chrono::seconds(3600));
-        lifetime.async_wait([this](asio::error_code ec) { if (!ec) limit("lifetime_limit"); });
+        lifetime.async_wait([this](asio::error_code ec) { if (!ec && !stopping) limit("lifetime_limit"); });
         reader = std::thread([this] { input_loop(); });
         writer = std::thread([this] { output_loop(); });
         watch(); watch_parent(); io.run(); stop();
@@ -533,6 +538,7 @@ int run(const std::vector<std::string>& args) {
         std::cout << result.dump(-1, ' ', true) << '\n'; return 0;
     } catch (const std::exception&) { return invalid(); }
 }
+#ifndef SERIAL_PORT_TESTING
 #ifdef _WIN32
 int wmain(int argc, wchar_t* argv[]) {
     _setmode(_fileno(stdin), _O_BINARY); _setmode(_fileno(stdout), _O_BINARY); _setmode(_fileno(stderr), _O_BINARY);
@@ -548,4 +554,5 @@ int wmain(int argc, wchar_t* argv[]) {
 }
 #else
 int main(int argc, char* argv[]) { return run(std::vector<std::string>(argv + 1, argv + argc)); }
+#endif
 #endif
