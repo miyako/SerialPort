@@ -1,6 +1,6 @@
 //%attributes = {"invisible":true}
 #DECLARE($event : Object)
-var SERIAL_Session : cs.MiyakoSerial.SerialPort
+var SERIAL_Session : cs.Serial.SerialPort
 var SERIAL_Report : Object
 var SERIAL_Status : 4D.File
 var SERIAL_Responses : Integer

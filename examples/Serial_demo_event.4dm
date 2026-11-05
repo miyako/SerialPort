@@ -1,5 +1,5 @@
 #DECLARE($event : Object)
-var SERIAL_Demo : cs.MiyakoSerial.SerialPort
+var SERIAL_Demo : cs.Serial.SerialPort
 var SERIAL_Connection : Text
 var SERIAL_Log : Collection
 var SERIAL_LogFile : 4D.File

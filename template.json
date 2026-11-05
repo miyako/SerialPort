@@ -2,7 +2,7 @@
   "schema": 1,
   "initialized": true,
   "repository": "SerialPort",
-  "namespace": "MiyakoSerial",
+  "namespace": "Serial",
   "cli": "serial-port",
   "language": "cpp",
   "feature": "Asynchronous multiplexed binary serial communication using standalone Asio",

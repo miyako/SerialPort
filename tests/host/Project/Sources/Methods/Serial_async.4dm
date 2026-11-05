@@ -1,6 +1,6 @@
 //%attributes = {"invisible":true}
 #DECLARE($target : Text; $report : Object; $statusPath : Text)
-var SERIAL_Session : cs.MiyakoSerial.SerialPort
+var SERIAL_Session : cs.Serial.SerialPort
 var SERIAL_Report : Object
 var SERIAL_Status : 4D.File
 var SERIAL_Responses : Integer
@@ -26,10 +26,10 @@ SERIAL_Responses:=0
 SERIAL_Returned:=False
 SERIAL_Ids:=New collection
 SERIAL_Report.async:=New object("events"; New collection; "responses"; New collection; "returnedBeforeCallbacks"; True)
-SERIAL_Report.async.invalidCallback:=cs.MiyakoSerial.SerialPort.new($target; New object).start()
+SERIAL_Report.async.invalidCallback:=cs.Serial.SerialPort.new($target; New object).start()
 SERIAL_Status.setText(JSON Stringify(SERIAL_Report))
 HOST_Phase:="async constructor"
-SERIAL_Session:=cs.MiyakoSerial.SerialPort.new($target; Formula(Serial_event($1)))
+SERIAL_Session:=cs.Serial.SerialPort.new($target; Formula(Serial_event($1)))
 HOST_Phase:="async launch"
 $result:=SERIAL_Session.start()
 SERIAL_Report.async.start:=$result

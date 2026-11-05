@@ -2,6 +2,6 @@
 <preferences stamp="4">
   <com.4d>
     <compiler><options syntax_file="true"/></compiler>
-    <general component_classStore_name="MiyakoSerial"/>
+    <general component_classStore_name="Serial"/>
   </com.4d>
 </preferences>

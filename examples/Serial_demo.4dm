@@ -1,5 +1,5 @@
 #DECLARE($command : Text; $path : Text; $data : Blob)
-var SERIAL_Demo : cs.MiyakoSerial.SerialPort
+var SERIAL_Demo : cs.Serial.SerialPort
 var SERIAL_Connection : Text
 var SERIAL_Log : Collection
 var SERIAL_LogFile : 4D.File
@@ -17,7 +17,7 @@ Case of
 		If (Is Windows)
 			$target:="Windows-x64"
 		End if
-		SERIAL_Demo:=cs.MiyakoSerial.SerialPort.new($target; Formula(Serial_demo_event($1)))
+		SERIAL_Demo:=cs.Serial.SerialPort.new($target; Formula(Serial_demo_event($1)))
 		$result:=SERIAL_Demo.start()
 		If ($result.ok)
 			$result:=SERIAL_Demo.open($path; New object("baudRate"; 9600; "dataBits"; 8; "stopBits"; "one"; "parity"; "none"; "flowControl"; "none"))
