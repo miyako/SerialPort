@@ -1,5 +1,6 @@
 """Portable pipe protocol tests and real macOS PTY serial integration."""
 import base64
+import errno
 import faulthandler
 import json
 import os
@@ -256,8 +257,10 @@ class PortableTests(unittest.TestCase):
                    + b"\n" + (json.dumps(backlog).encode() + b"\n") * 1024)
         try:
             s.raw(payload)
-        except BrokenPipeError:
-            pass
+        except OSError as error:
+            # Windows CRT can report EINVAL when shutdown closes the pipe mid-write.
+            if not isinstance(error, BrokenPipeError) and not (os.name == "nt" and error.errno == errno.EINVAL):
+                raise
         self.assertTrue(s.response("first")["ok"])
         self.assertTrue(s.response("stop")["ok"])
         self.assertEqual(s.proc.wait(timeout=5), 0)
