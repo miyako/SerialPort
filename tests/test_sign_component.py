@@ -259,6 +259,25 @@ class SigningTests(unittest.TestCase):
         self.assertIn(["/usr/bin/security", "list-keychains", "-d", "user",
                        "-s", "/Users/runner/Library/Keychains/login.keychain-db"], commands)
 
+    def test_isolated_keychain_is_explicitly_searchable_without_dropping_existing_chains(self):
+        baseline = ["/Users/runner/Library/Keychains/login.keychain-db",
+                    "/Users/runner/Library/Keychains/existing.keychain-db"]
+        search = list(baseline)
+        commands = []
+        def response(arguments, **kwargs):
+            commands.append(arguments)
+            if "list-keychains" in arguments:
+                if "-s" in arguments:
+                    search[:] = [str(path) for path in arguments[arguments.index("-s") + 1:]]
+                return completed("".join('"' + path + '"\n' for path in search))
+            return keychain_completed(arguments)
+        with patch.object(signing, "run", side_effect=response):
+            with signing.keychain(self.root, SECRETS) as (chain, _, _):
+                self.assertEqual(search, [str(chain), *baseline])
+                self.assertIn(["/usr/bin/security", "list-keychains", "-d", "user",
+                               "-s", chain, *baseline], commands)
+        self.assertEqual(search, baseline)
+
     def test_keychain_cleanup_error_is_not_success(self):
         def response(arguments, **kwargs):
             if "delete-keychain" in arguments:

@@ -297,6 +297,8 @@ def keychain(root, secrets):
             run(["/usr/bin/security", "create-keychain", "-p", secrets["KEYCHAIN_PASSWORD"], chain])
             run(["/usr/bin/security", "set-keychain-settings", "-lut", "21600", chain])
             run(["/usr/bin/security", "unlock-keychain", "-p", secrets["KEYCHAIN_PASSWORD"], chain])
+            # codesign's private-key lookup still needs the chain in the search list.
+            run(["/usr/bin/security", "list-keychains", "-d", "user", "-s", chain, *previous_search])
             try:
                 run(["/usr/bin/security", "import", certificate, "-k", chain,
                      "-P", secrets["APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD"],
