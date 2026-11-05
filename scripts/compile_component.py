@@ -43,7 +43,7 @@ def output_digest(component):
     return digest.hexdigest()
 
 
-def compile_component(root, tool4d):
+def compile_component(root, tool4d, *, postprocess_outputs=None):
     root = Path(root).resolve()
     config = json.loads((root / "template.json").read_text())
     if not config["initialized"]:
@@ -81,6 +81,10 @@ def compile_component(root, tool4d):
         raise ValueError("compiler result does not identify the required project and targets")
     if input_digest(root) != original_digest:
         raise ValueError("component inputs changed during compilation; refusing stale output")
+    if postprocess_outputs is not None:
+        postprocess_outputs(project.parent.parent)
+        if input_digest(root) != original_digest:
+            raise ValueError("component inputs changed during output processing; refusing stale output")
     status["input_sha256"] = original_digest
     status["output_sha256"] = output_digest(project.parent.parent)
     output.write_text(json.dumps(status, indent=2) + "\n")

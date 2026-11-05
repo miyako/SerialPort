@@ -148,8 +148,8 @@ class ReleaseRefTests(unittest.TestCase):
     def test_workflows_pin_every_post_gate_checkout_and_package_tag(self):
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertEqual(ci.count("uses: actions/checkout@v4"), 3)
-        self.assertEqual(ci.count("ref: ${{ inputs.source_sha || github.sha }}"), 3)
+        self.assertEqual(ci.count("uses: actions/checkout@v4"), 5)
+        self.assertEqual(ci.count("ref: ${{ inputs.source_sha || github.sha }}"), 5)
         self.assertEqual(ci.count("&& !inputs.release_call"), 4)
         self.assertIn("workflow_dispatch:", ci)
         self.assertIn("workflow_dispatch:", release)
