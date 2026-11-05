@@ -1,7 +1,7 @@
 # _CLI (internal convention)
 
 `cs._CLI.new(executableName : Text; target : Text)` is the reusable bundled
-executable resolver. The host can technically access `cs.MiyakoSerial._CLI`;
+executable resolver. The host can technically access `cs.Serial._CLI`;
 underscore naming is not true private access in 4D.
 
 This resolves a standalone CLI for separate-process execution, not a native

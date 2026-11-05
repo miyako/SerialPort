@@ -1,12 +1,12 @@
 # SerialPort
 
 First asynchronous serial communication prototype for **4D**, implemented as a
-real CLI-backed component: `cs.MiyakoSerial.SerialPort` -> one persistent
+real CLI-backed component: `cs.Serial.SerialPort` -> one persistent
 `4D.SystemWorker` -> bundled C++17/standalone Asio helper -> multiple serial ports.
 No 4D plug-in SDK or host plug-in installation is involved.
 
 Repository/component/project/package identity: **SerialPort**. Independent
-namespace: **MiyakoSerial**. Public class: **SerialPort**. Executable:
+namespace: **Serial**. Public class: **SerialPort**. Executable:
 **serial-port**, version **0.1.0**. Source compatibilityVersion is 2060;
 the inherited available test runtime is free **tool4d 20.7 LTS/build 101905**
 on macOS ARM64. This prototype targets that runtime, not a promise of support
@@ -29,7 +29,7 @@ Minimal host method `Serial_demo`:
 
 ```4d
 #DECLARE($command : Text; $port : Text)
-var SERIAL : cs.MiyakoSerial.SerialPort
+var SERIAL : cs.Serial.SerialPort
 var $result : Object
 Case of
   : ($command="start")
@@ -38,7 +38,7 @@ Case of
     If (Is Windows)
       $target:="Windows-x64"
     End if
-    SERIAL:=cs.MiyakoSerial.SerialPort.new($target; Formula(Serial_demo_event($1)))
+    SERIAL:=cs.Serial.SerialPort.new($target; Formula(Serial_demo_event($1)))
     $result:=SERIAL.start()
     If ($result.ok)
       $result:=SERIAL.open($port; New object("baudRate"; 9600; "dataBits"; 8;
@@ -56,7 +56,7 @@ or the OS's `"COM3"` path. The `Serial_demo_event` callback receives one Object:
 
 ```4d
 #DECLARE($event : Object)
-var SERIAL : cs.MiyakoSerial.SerialPort
+var SERIAL : cs.Serial.SerialPort
 // Store open reply's result.connection; use SERIAL.write(id; blob; 1000).
 // data events carry connection and bytes (Blob); accumulate device framing.
 // Forward errors/disconnections to UI via CALL FORM or CALL WORKER(1; ...).

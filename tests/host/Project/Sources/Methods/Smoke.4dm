@@ -3,7 +3,7 @@ var $ignored : Integer
 var $parameter; $name; $target : Text
 var $folderPath : Text
 var $request; $result; $report : Object
-var $tool : cs.MiyakoSerial.SerialPort
+var $tool : cs.Serial.SerialPort
 var $requestFile; $statusFile : 4D.File
 var $renamedExecutable : 4D.File
 var $invalid : Variant
@@ -31,7 +31,7 @@ $target:="macOS-universal"
 If (Is Windows)
 	$target:="Windows-x64"
 End if
-$tool:=cs.MiyakoSerial.SerialPort.new($target)
+$tool:=cs.Serial.SerialPort.new($target)
 $report:=New object("success"; True; "finished"; False; "cases"; New collection)
 $report.compiled:=$tool._cli.compiled
 HOST_Phase:="renamed executable"
@@ -40,7 +40,7 @@ If (Is Windows)
 Else
 	$renamedExecutable:=File($request.executable; fk posix path)
 End if
-$report.renamedExecutable:=cs.MiyakoSerial._Process.new().execute($renamedExecutable; New collection("--version"))
+$report.renamedExecutable:=cs.Serial._Process.new().execute($renamedExecutable; New collection("--version"))
 If (Not($report.renamedExecutable.ok))
 	$report.success:=False
 End if
@@ -68,18 +68,18 @@ Else
 	End if
 End if
 HOST_Phase:="missing executable"
-$result:=cs.MiyakoSerial._CLI.new("missing-cli"; $target).execute(New collection("--version"))
+$result:=cs.Serial._CLI.new("missing-cli"; $target).execute(New collection("--version"))
 $report.missing:=$result
 If ($result.error.code#"missing_executable")
 	$report.success:=False
 End if
-$result:=cs.MiyakoSerial.SerialPort.new("unsupported-arm-target").version()
+$result:=cs.Serial.SerialPort.new("unsupported-arm-target").version()
 $report.unsupported:=$result
 If ($result.error.code#"unsupported_architecture")
 	$report.success:=False
 End if
 HOST_Phase:="launch failure"
-$result:=cs.MiyakoSerial._Process.new().execute($requestFile; New collection)
+$result:=cs.Serial._Process.new().execute($requestFile; New collection)
 $report.launch:=$result
 If ($result.error.code#"launch_failed")
 	$report.success:=False
@@ -112,7 +112,7 @@ For each ($name; New collection("true"; "false"; "null"; "1"; "[]"))
 	End if
 End for each
 HOST_Phase:="File argument"
-$result:=cs.MiyakoSerial._CLI.new("serial-port"; $target).execute(New collection("echo"; "--text"; $requestFile))
+$result:=cs.Serial._CLI.new("serial-port"; $target).execute(New collection("echo"; "--text"; $requestFile))
 $report.fileArgument:=$result
 If (Not($result.ok))
 	$report.success:=False
@@ -124,7 +124,7 @@ End if
 $report.rejectedArguments:=New collection
 HOST_Phase:="scalar arguments"
 For each ($invalid; New collection(123; 1.25; True; False; Null; Current date; Current time; New collection; New object))
-	$result:=cs.MiyakoSerial._Process.new().execute($requestFile; New collection($invalid))
+	$result:=cs.Serial._Process.new().execute($requestFile; New collection($invalid))
 	$report.rejectedArguments.push(New object("type"; Value type($invalid); "result"; $result))
 	If ($result.ok | ($result.error.code#"invalid_argument"))
 		$report.success:=False
@@ -133,14 +133,14 @@ End for each
 $report.rejectedNul:=New collection
 HOST_Phase:="NUL arguments"
 For each ($name; New collection(Char(0)+"prefix"; "middle"+Char(0)+"suffix"; "trailing"+Char(0)))
-	$result:=cs.MiyakoSerial._Process.new().execute($requestFile; New collection($name))
+	$result:=cs.Serial._Process.new().execute($requestFile; New collection($name))
 	$report.rejectedNul.push($result)
 	If ($result.ok | ($result.error.code#"invalid_argument"))
 		$report.success:=False
 	End if
 End for each
-$report.missingFile:=cs.MiyakoSerial._Process.new().execute(Null; New collection)
-$report.missingArguments:=cs.MiyakoSerial._Process.new().execute($requestFile; Null)
+$report.missingFile:=cs.Serial._Process.new().execute(Null; New collection)
+$report.missingArguments:=cs.Serial._Process.new().execute($requestFile; Null)
 If ($report.missingFile.ok | ($report.missingFile.error.code#"invalid_argument"))
 	$report.success:=False
 End if
@@ -148,7 +148,7 @@ If ($report.missingArguments.ok | ($report.missingArguments.error.code#"invalid_
 	$report.success:=False
 End if
 HOST_Phase:="Folder argument"
-$result:=cs.MiyakoSerial._CLI.new("serial-port"; $target).execute(New collection("echo"; "--text"; $requestFile.parent))
+$result:=cs.Serial._CLI.new("serial-port"; $target).execute(New collection("echo"; "--text"; $requestFile.parent))
 $report.folderArgument:=$result
 $folderPath:=$requestFile.parent.path
 If (Is Windows)

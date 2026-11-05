@@ -1,6 +1,6 @@
 {
 	"_method_": {},
-	"cs.MiyakoSerial": {
+	"cs.Serial": {
 		"_CLI": {
 			"new()": {
 				"Syntax": "**.new**( *executableName* : Text; *target* : Text )",

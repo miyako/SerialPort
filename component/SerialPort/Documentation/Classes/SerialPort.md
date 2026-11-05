@@ -1,6 +1,6 @@
 # SerialPort
 
-`cs.MiyakoSerial.SerialPort.new(target; callback)` creates an owner-scoped
+`cs.Serial.SerialPort.new(target; callback)` creates an owner-scoped
 session. **Construct, retain and call it inside a live `CALL WORKER` worker.**
 The constructor does not launch anything; `start()` launches one bundled
 `serial-port serve` process. The worker must return to its event loop to deliver
