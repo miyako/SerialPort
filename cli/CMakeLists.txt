@@ -34,6 +34,7 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
-  add_test(NAME serial-native COMMAND ${Python3_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_serial_native.py --executable $<TARGET_FILE:serial-port>)
+  add_test(NAME serial-native COMMAND ${Python3_EXECUTABLE} -u
+    ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_serial_native.py --executable $<TARGET_FILE:serial-port> -v)
+  set_tests_properties(serial-native PROPERTIES TIMEOUT 120)
 endif()

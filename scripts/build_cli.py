@@ -138,7 +138,8 @@ def build(root, target, language=None, cross=False):
             subprocess.run(["cargo", "test", "--release", "--locked"], cwd=source, env=env, check=True, timeout=600)
         elif (output / "cmake/CTestTestfile.cmake").is_file():
             subprocess.run(["ctest", "--test-dir", str(output / "cmake"), "-C", "Release",
-                            "--output-on-failure", "--no-tests=error"], env=env, check=True, timeout=600)
+                            "--verbose", "--output-on-failure", "--no-tests=error"],
+                           env=env, check=True, timeout=600)
         else:
             print("C++ native unit tests not registered; Python CLI contract tests still required")
     if selected == "rust":

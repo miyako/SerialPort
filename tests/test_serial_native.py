@@ -1,5 +1,6 @@
 """Portable pipe protocol tests and real macOS PTY serial integration."""
 import base64
+import faulthandler
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,59 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTABLE = None
 CONFIG = dict(baudRate=115200, dataBits=8, stopBits="one", parity="none", flowControl="none")
+
+def write_deadline(fd, data, timeout=5):
+    os.set_blocking(fd, False)
+    remaining = memoryview(data)
+    end = time.monotonic() + timeout
+    while remaining:
+        if time.monotonic() >= end:
+            raise AssertionError(f"write deadline exceeded: fd={fd}, remaining={len(remaining)}")
+        try:
+            written = os.write(fd, remaining)
+        except BlockingIOError:
+            if os.name == "posix":
+                import select
+                select.select([], [fd], [], max(0, end - time.monotonic()))
+            else:
+                time.sleep(.001)
+            continue
+        if not written:
+            raise AssertionError(f"write returned zero: fd={fd}")
+        remaining = remaining[written:]
+
+
+def read_deadline(fd, size, timeout=5):
+    import select
+    os.set_blocking(fd, False)
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if select.select([fd], [], [], max(0, end - time.monotonic()))[0]:
+            try:
+                return os.read(fd, size)
+            except BlockingIOError:
+                continue
+    raise AssertionError(f"read deadline exceeded: fd={fd}, requested={size}")
+
+
+def read_line_deadline(fd, timeout=5):
+    end = time.monotonic() + timeout
+    line = b""
+    while not line.endswith(b"\n"):
+        byte = read_deadline(fd, 1, max(.001, end - time.monotonic()))
+        if not byte:
+            raise AssertionError("EOF before diagnostic/protocol line")
+        line += byte
+    return line
+
+
+def close_process(proc):
+    if proc.poll() is None:
+        proc.kill()
+    proc.wait(timeout=5)
+    for stream in (proc.stdin, proc.stdout, proc.stderr):
+        if stream is not None:
+            stream.close()
 
 
 class Session:
@@ -46,8 +100,7 @@ class Session:
         return identifier
 
     def raw(self, data):
-        self.proc.stdin.write(data)
-        self.proc.stdin.flush()
+        write_deadline(self.proc.stdin.fileno(), data)
 
     def until(self, predicate, timeout=8):
         for n, value in enumerate(self.saved):
@@ -57,7 +110,10 @@ class Session:
         while time.monotonic() < end:
             value = self.lines.get(timeout=max(.01, end - time.monotonic()))
             if value is None:
-                raise AssertionError("helper closed stdout before expected response/event")
+                status = self.proc.wait(timeout=5)
+                diagnostic = self.proc.stderr.read().decode("utf-8", errors="replace")
+                raise AssertionError(f"helper closed stdout before expected response/event: "
+                                     f"exit={status}, stderr={diagnostic!r}")
             if isinstance(value, Exception):
                 raise value
             if predicate(value):
@@ -80,6 +136,7 @@ class Session:
                 self.proc.kill()
                 self.proc.wait(timeout=5)
         self.thread.join(timeout=2)
+        self.testcase.assertFalse(self.thread.is_alive(), "stdout reader did not finish after helper exit")
         for stream in (self.proc.stdin, self.proc.stdout, self.proc.stderr):
             stream.close()
 
@@ -97,6 +154,9 @@ class PortableTests(unittest.TestCase):
             EXECUTABLE = next((p for p in candidates if p.exists()), None)
         if EXECUTABLE is None:
             raise RuntimeError("build CLI first or supply --executable")
+        faulthandler.enable()
+        faulthandler.dump_traceback_later(60, repeat=True)
+        cls.addClassCleanup(faulthandler.cancel_dump_traceback_later)
 
     def test_fragmented_coalesced_and_shutdown(self):
         s = Session(self)
@@ -154,9 +214,9 @@ class PortableTests(unittest.TestCase):
     def test_broken_stdout(self):
         proc = subprocess.Popen([str(EXECUTABLE), "serve"], stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(close_process, proc)
         proc.stdout.close()
-        proc.stdin.write(b'{"protocol":1,"id":"x","op":"list"}\n')
-        proc.stdin.flush()
+        write_deadline(proc.stdin.fileno(), b'{"protocol":1,"id":"x","op":"list"}\n')
         self.assertEqual(proc.wait(timeout=5), 3)
         self.assertEqual(json.loads(proc.stderr.read())["error"]["code"], "output_failed")
         proc.stdin.close()
@@ -187,6 +247,40 @@ class PortableTests(unittest.TestCase):
                 self.assertEqual(s.response("")["error"]["code"], "invalid_frame")
                 self.assertEqual(s.proc.wait(timeout=5), 0)
 
+    def test_shutdown_with_backpressured_ingress(self):
+        s = Session(self)
+        first = dict(protocol=1, id="first", op="list", padding="x" * 64000)
+        shutdown = dict(protocol=1, id="stop", op="shutdown")
+        backlog = dict(protocol=1, id="queued", op="close", connection="missing")
+        payload = (json.dumps(first).encode() + b"\n" + json.dumps(shutdown).encode()
+                   + b"\n" + (json.dumps(backlog).encode() + b"\n") * 1024)
+        try:
+            s.raw(payload)
+        except BrokenPipeError:
+            pass
+        self.assertTrue(s.response("first")["ok"])
+        self.assertTrue(s.response("stop")["ok"])
+        self.assertEqual(s.proc.wait(timeout=5), 0)
+
+    def test_test_io_write_deadline(self):
+        read_fd, write_fd = os.pipe()
+        try:
+            with self.assertRaisesRegex(AssertionError, "write deadline exceeded"):
+                write_deadline(write_fd, b"x" * 1048576, timeout=.1)
+        finally:
+            os.close(write_fd)
+            os.close(read_fd)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX test read/select")
+    def test_test_io_read_deadline(self):
+        read_fd, write_fd = os.pipe()
+        try:
+            with self.assertRaisesRegex(AssertionError, "read deadline exceeded"):
+                read_deadline(read_fd, 1, timeout=.1)
+        finally:
+            os.close(write_fd)
+            os.close(read_fd)
+
     @unittest.skipUnless(os.name == "posix", "POSIX parent termination signal")
     def test_termination(self):
         s = Session(self)
@@ -214,22 +308,20 @@ class PTYTests(PortableTests):
         self.assertEqual(data, expected)
 
     def test_two_ports_binary_serialization(self):
-        import select
         s = Session(self)
         m1, c1 = self.port(s)
         m2, c2 = self.port(s)
         self.assertNotEqual(c1, c2)
         data = bytes(range(256)) * 8
-        os.write(m1, data)
-        os.write(m2, data[::-1])
+        write_deadline(m1, data)
+        write_deadline(m2, data[::-1])
         self.receive(s, c1, data)
         self.receive(s, c2, data[::-1])
         ids = [s.send("write", connection=c1, data=base64.b64encode(chunk).decode(),
                       timeoutMs=5000) for chunk in (data, data[::-1])]
         received = b""
         while len(received) < len(data) * 2:
-            self.assertTrue(select.select([m1], [], [], 5)[0])
-            received += os.read(m1, 8192)
+            received += read_deadline(m1, 8192)
         self.assertEqual(received, data + data[::-1])
         for identifier in ids:
             self.assertEqual(s.response(identifier)["result"]["transferred"], len(data))
@@ -318,7 +410,8 @@ class PTYTests(PortableTests):
         bridge = subprocess.Popen([sys.executable, "-c", bridge_code, str(EXECUTABLE)],
                                   stdin=read_fd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         os.close(read_fd)
-        child_pid = int(bridge.stderr.readline())
+        self.addCleanup(close_process, bridge)
+        child_pid = int(read_line_deadline(bridge.stderr.fileno()))
         lines = queue.Queue()
 
         def consume():
@@ -331,11 +424,11 @@ class PTYTests(PortableTests):
         try:
             request = dict(protocol=1, id="parent-open", op="open",
                            path=os.ttyname(slave), config=CONFIG)
-            os.write(write_fd, json.dumps(request).encode() + b"\n")
+            write_deadline(write_fd, json.dumps(request).encode() + b"\n")
             result = lines.get(timeout=5)
             self.assertTrue(result["ok"], result)
             connection = result["result"]["connection"]
-            os.write(master, b"parent-liveness")
+            write_deadline(master, b"parent-liveness")
             event = lines.get(timeout=5)
             self.assertEqual(event["connection"], connection)
             self.assertEqual(base64.b64decode(event["data"]), b"parent-liveness")
@@ -360,7 +453,7 @@ class PTYTests(PortableTests):
                     break
                 time.sleep(.05)
             self.assertTrue(released, "helper remained alive after parent death")
-            self.assertEqual(bridge.stderr.read(), b"")
+            self.assertEqual(read_deadline(bridge.stderr.fileno(), 4096), b"")
         finally:
             os.close(write_fd)
             if bridge.poll() is None:
@@ -431,11 +524,10 @@ class PTYTests(PortableTests):
         self.addCleanup(os.close, slave)
         proc = subprocess.Popen([str(EXECUTABLE), "serve"], stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.addCleanup(lambda: proc.kill() if proc.poll() is None else None)
-        proc.stdin.write(json.dumps(dict(protocol=1, id="open", op="open",
-                                        path=os.ttyname(slave), config=CONFIG)).encode() + b"\n")
-        proc.stdin.flush()
-        response = json.loads(proc.stdout.readline())
+        self.addCleanup(close_process, proc)
+        write_deadline(proc.stdin.fileno(), json.dumps(dict(protocol=1, id="open", op="open",
+                       path=os.ttyname(slave), config=CONFIG)).encode() + b"\n")
+        response = json.loads(read_line_deadline(proc.stdout.fileno()))
         self.assertTrue(response["ok"])
         os.set_blocking(master, False)
         end = time.monotonic() + 8

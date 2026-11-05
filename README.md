@@ -201,6 +201,29 @@ the exact HTTPS vendor hosts `resources-download.4d.com` and `builds2.4d.com`,
 with bounded redirects, unchanged pinned SHA256 and safe extraction. It never
 falls back to `latest` or an unpinned replacement.
 
+## CI artifacts (not releases)
+
+With the public Actions variable `FOURD_ENABLED=true`, branch/PR CI builds
+and tests native macOS Intel, macOS ARM64 and Windows x64 helpers, verifies
+same-commit/source manifests, assembles universal macOS resources, and uses
+the pinned free tool4d for source, compilation and unpacked compiled-host checks.
+Only after all package gates pass does it upload **SerialPort-compiled-component**,
+containing `SerialPort.zip` and its SHA256-bound `SerialPort.acceptance.json`.
+Artifacts are retained for 14 days; failed runs retain diagnostic reports but
+do not upload a success-shaped compiled package.
+
+Download that Actions artifact, extract its `SerialPort.zip`, then unzip the
+component ZIP to obtain `SerialPort.4dbase` for a host's `Components/` folder.
+This is unsigned development distribution, not a tagged release or a
+Dependency-manager download/install acceptance check. No tag, release or merge
+is created by the validation workflow. Follow the run/evidence links in the PR
+for the exact accepted revision; an older artifact does not approve later code.
+
+Native CLI test success does not prove native Windows/Intel **4D host loading**
+or physical-device behavior. The available actual compiled-host gate is macOS
+ARM64. Acceptance therefore remains `result:"partial"`, `finished:true`,
+`release_ready:false`; signing/notarization and hardware checks remain separate.
+
 ## Hardware acceptance
 
 Supply two actual OS port paths. Open both with equipment-approved settings,

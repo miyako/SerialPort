@@ -197,7 +197,11 @@ class Server {
         event("disconnected", p->id, J{{"error", error_value(reason, "connection closed")}});
     }
     void stop(int status = 0) {
-        if (stopping.exchange(true)) return;
+        {
+            // Match the mutex used by both condition-variable predicates.
+            std::lock_guard<std::mutex> lock(mutex);
+            if (stopping.exchange(true)) return;
+        }
         exit_status = status;
         while (!connections.empty()) close_port(connections.begin()->second, "session_closed");
         lifetime.cancel(); watchdog.cancel(); parent_timer.cancel(); signals.cancel(); cv.notify_all();
@@ -420,7 +424,8 @@ class Server {
         watchdog.expires_after(std::chrono::milliseconds(50));
         watchdog.async_wait([this](asio::error_code ec) {
             if (ec) return;
-            if (pipe_failed || (writer_started && now() - writer_started > 2000)) {
+            const auto started = writer_started.load();
+            if (pipe_failed || (started != 0 && now() - started > 2000)) {
                 pipe_failed = true; stop(3);
 #ifdef _WIN32
                 CancelSynchronousIo(writer.native_handle());

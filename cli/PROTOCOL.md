@@ -138,3 +138,7 @@ build/provenance gates and runs CTest (portable pipe and actual macOS PTY tests)
 `python3 -m unittest discover -s tests -p test_cli.py -v` builds and tests argv.
 CTest uses the existing native Windows-x64 CMake pattern; Windows serial hardware,
 native Intel execution and full-duration lifetime still require their own evidence.
+CTest runs the native harness unbuffered and verbose with a 120-second suite
+timeout. The harness dumps Python thread stacks after 60 seconds, and pipe/PTY
+test writes and POSIX test reads have individual deadlines. A shutdown-ingress
+backpressure regression covers condition-variable wakeup and helper teardown.
