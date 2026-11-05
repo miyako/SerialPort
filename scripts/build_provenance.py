@@ -12,8 +12,9 @@ def sha256(path):
 def source_digest(root):
     root = Path(root).resolve()
     files = [root / "template.json", root / "package.json"]
-    files += sorted(path for path in (root / "cli").rglob("*")
-                    if path.is_file() and path.relative_to(root / "cli").parts[0] not in {"target", "build"})
+    files += sorted((path for path in (root / "cli").rglob("*")
+                     if path.is_file() and path.relative_to(root / "cli").parts[0] not in {"target", "build"}),
+                    key=lambda path: path.relative_to(root).as_posix())
     digest = hashlib.sha256()
     for path in files:
         if any(parent.is_symlink() for parent in [path, *path.parents]):
