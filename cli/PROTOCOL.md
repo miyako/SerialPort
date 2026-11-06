@@ -1,10 +1,10 @@
-# serial-port 0.1.0
+# serial-port 0.1.1
 
 C++17 standalone Asio process; no 4D SDK or host-installed plug-in. Bluetooth
 devices are supported only when the OS exposes them as serial ports. No pairing,
 discovery, reconnect, shell invocation or runtime dependency download.
 
-`--version` returns `{"protocol":1,"version":"0.1.0"}`.
+`--version` returns `{"protocol":1,"version":"0.1.1"}`.
 `list` returns `{"protocol":1,"ports":[{"path":"…","name":"…"}]}`.
 macOS lists `/dev/cu.*` and `/dev/tty.*`; these can be two aliases of a device.
 Windows-x64 lists OS SERIALCOMM registry entries, with paths `\\.\COMn`.
