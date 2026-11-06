@@ -17,7 +17,7 @@ SECRETS = (
 
 class SigningWorkflowTests(unittest.TestCase):
     def test_only_manual_signing_jobs_receive_secrets(self):
-        manual_gate = "if: github.event_name == 'workflow_dispatch' && inputs.sign"
+        manual_gate = "if: github.event_name == 'workflow_dispatch'"
         for name, body in JOBS.items():
             if name in ("signing_preflight", "signed_macos"):
                 self.assertIn(manual_gate, body)
@@ -35,7 +35,9 @@ class SigningWorkflowTests(unittest.TestCase):
         self.assertIn("needs: [signing_preflight,", JOBS["signed_macos"])
         self.assertNotIn("signing_preflight", JOBS["configuration"])
         self.assertNotIn("continue-on-error", WORKFLOW)
-        self.assertIn("default: false", WORKFLOW.split("workflow_call:", 1)[0])
+        dispatch = WORKFLOW.split("workflow_dispatch:", 1)[1].split("workflow_call:", 1)[0]
+        self.assertNotIn("inputs:", dispatch)
+        self.assertNotIn("inputs.sign", WORKFLOW)
 
     def test_signed_job_requires_all_native_and_baseline_gates(self):
         signed = JOBS["signed_macos"]

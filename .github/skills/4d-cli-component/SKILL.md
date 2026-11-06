@@ -66,8 +66,10 @@ or packaging; do not turn an SDK requirement into a component resource.
    paths, `passed` / `failed` / `not_run` per check and blockers. Partial local success
    is **NOT release ready**. Do not publish or add credentials without approval.
    Unsigned free tool4d local compilation needs no license/signing secrets.
-   The current release workflow consumes none of the seven Apple secrets
-   documented in AGENTS.md; registering them does not enable signing.
+   In this adopted destination, explicit manual CI and main-only Publish use
+   six Apple secrets through the approved signing pipeline. Publish derives
+   its version/tag automatically and remains a prototype prerelease; credential
+   registration is not proof of actual signing or package-host acceptance.
 
 ## Discovery is supported, invocation is not guaranteed
 

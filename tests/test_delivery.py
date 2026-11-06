@@ -224,7 +224,7 @@ class DeliveryTests(unittest.TestCase):
             self.write_config()
 
     def test_bad_tag_or_semver(self):
-        for tag in ("0.1.0", "v0.2.0", "v0.1.0/../../escape"):
+        for tag in ("0.2.0", "v0.2.0", "0.1.0/../../escape", "v0.1.0/../../escape"):
             with self.subTest(tag=tag), self.assertRaisesRegex(ValueError, "tag"):
                 package_component.package(self.root, repository="owner/example-component", tag=tag)
         for version in ("01.1.0", "0.1", "0.1.0-01", "0.1.0\n", "0.1.0/escape"):
@@ -232,6 +232,13 @@ class DeliveryTests(unittest.TestCase):
             self.write_config()
             with self.subTest(version=version), self.assertRaisesRegex(ValueError, "SemVer"):
                 ci_config.load_config(self.root)
+
+    def test_prefix_free_and_legacy_matching_tags_pack_the_same_component(self):
+        prefix_free = package_component.package(
+            self.root, repository="owner/example-component", tag="0.1.0").read_bytes()
+        legacy = package_component.package(
+            self.root, repository="owner/example-component", tag="v0.1.0").read_bytes()
+        self.assertEqual(prefix_free, legacy)
 
     def test_missing_resources(self):
         for resource in (self.mac, self.windows):

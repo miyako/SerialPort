@@ -194,7 +194,8 @@ requires actual compiled host loading. **A native helper/source-host pass is
 not compiled-package acceptance or release readiness.** The follow-up milestone
 authorizes a prototype branch/PR and GitHub Actions validation, not merging,
 tags or release publication. The separately approved macOS signing setup is
-described below; normal CI and the release workflow remain unsigned.
+described below. Push/PR CI produces unsigned development artifacts; explicit
+manual CI and Publish require the signed/notarized macOS pipeline.
 Optional hosted 4D is controlled
 by `FOURD_ENABLED`. The fixed downloader fails closed if its approved origin
 policy rejects a redirect. The downloader validates every redirect hop against
@@ -202,7 +203,38 @@ the exact HTTPS vendor hosts `resources-download.4d.com` and `builds2.4d.com`,
 with bounded redirects, unchanged pinned SHA256 and safe extraction. It never
 falls back to `latest` or an unpinned replacement.
 
-## CI artifacts (not releases)
+## Actions: CI or Publish, no tag entry
+
+The interaction follows [Overlay's Actions](https://github.com/miyako/Overlay/actions):
+
+| Action | Manual interaction | Result |
+| --- | --- | --- |
+| **CI** | **Run workflow**, choose a reviewed branch; no inputs | Native builds/tests and signed/notarized macOS artifacts; no version commit, tag or release |
+| **Publish** | **Run workflow** on **main**, choose `patch` (default), `minor` or `major` | Automatic version commit, then the same native/signing/package gates, then a prefix-free tag and **prototype prerelease** |
+
+These workflow changes become available in the Actions UI after merging to the
+default branch. Publication is a separate, deliberate action: a push, PR or CI
+dispatch cannot publish. Do not dispatch **Publish** just to obtain a signed
+test package. Main must permit its `GITHUB_TOKEN` version commit; branch rules
+are not bypassed if they reject it.
+
+Publish reads numeric `X.Y.Z` tags (including legacy `vX.Y.Z` history) and applies
+the selected increment. With no tags it uses the configured version as the
+baseline. New tags equal the version without `v`; no existing tag is required
+and no tag is created until the exact signed assets pass acceptance. Version
+metadata, CLI response, examples and independent native/4D test expectations
+are updated together before all builds pin the resulting immutable commit.
+The final job downloads the accepted ZIP/DMG/evidence and all three native
+manifests again, verifies their provenance and bytes, and checks for tag/release
+collisions before atomic tag creation and `--verify-tag` publication.
+
+There is **no unsigned Publish fallback**. All GitHub releases remain
+**prereleases**, never automatically “Latest”: numeric version tags do not claim
+stable hardware acceptance. Evidence remains `release_ready:false`; Windows
+Authenticode, native Intel/Windows 4D, physical devices, published-download
+installation and per-device text decoding are not established by this flow.
+
+## Unsigned development artifacts (push/PR)
 
 With the public Actions variable `FOURD_ENABLED=true`, branch/PR CI builds
 and tests native macOS Intel, macOS ARM64 and Windows x64 helpers, verifies
@@ -268,16 +300,18 @@ requires exactly one valid Developer ID Application identity for
 `NOTARYTOOL_TEAM_ID`. Missing, incompatible or ambiguous identities fail; CI
 never picks an unrelated identity from the runner's login keychain.
 
-Run **Actions -> CI -> Run workflow**, select the reviewed branch, and enable
-`sign`. The CLI equivalent is:
+Run **Actions -> CI -> Run workflow** and select the reviewed branch. There is
+no tag or signing checkbox; explicit manual CI always requires signing. The CLI
+equivalent is:
 
 ```sh
 gh workflow run ci.yml --repo miyako/SerialPort \
-  --ref YOUR_REVIEWED_BRANCH -f sign=true
+  --ref YOUR_REVIEWED_BRANCH
 ```
 
-Only this explicit manual event can access signing credentials; push, PR and
-reusable release calls cannot activate signing. The workflow retains all
+Only explicit manual events can access signing credentials: CI directly, or
+Publish on main reusing CI with inherited repository/environment secrets.
+Push and PR events cannot activate signing. The workflow retains all
 native/provenance checks and uses an isolated keychain, minimal signing-tool
 access, unconditional cleanup and no helper entitlements. It signs the assembled
 universal helper **before** source-host testing and compilation, then signs
@@ -303,7 +337,8 @@ and repeats real compiled-host acceptance. Only then is
 **SerialPort-macOS-signed-notarized** uploaded, containing `SerialPort.zip`,
 `SerialPort.dmg` and SHA256-bound `SerialPort.signing.json`. The short-lived
 `SerialPort-macOS-signing-candidate` is an intermediate round-trip input, not the
-final handoff. No tag, Release or merge is created.
+final handoff. CI creates no tag, Release or merge; only a separate successful
+Publish dispatch creates its accepted tag and prototype prerelease.
 
 **Windows is separate:** the Windows helper still has no configured Authenticode
 signing setup; Apple credentials/notarization do not sign PE files or establish

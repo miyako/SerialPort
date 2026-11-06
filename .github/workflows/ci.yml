@@ -3,11 +3,6 @@ on:
   push:
   pull_request:
   workflow_dispatch:
-    inputs:
-      sign:
-        description: Sign and notarize the macOS distributable using the macos-signing environment
-        type: boolean
-        default: false
   workflow_call:
     inputs:
       source_sha:
@@ -15,7 +10,7 @@ on:
         type: string
         default: ''
       release_call:
-        description: Release caller performs mandatory 4D acceptance separately
+        description: Publish uses mandatory signed-package acceptance instead of optional unsigned acceptance
         type: boolean
         default: false
 
@@ -24,7 +19,7 @@ permissions:
 
 jobs:
   signing_preflight:
-    if: github.event_name == 'workflow_dispatch' && inputs.sign
+    if: github.event_name == 'workflow_dispatch'
     environment: macos-signing
     runs-on: ubuntu-24.04
     steps:
@@ -178,7 +173,7 @@ jobs:
 
   signed_macos:
     needs: [signing_preflight, configuration, native, assembly]
-    if: github.event_name == 'workflow_dispatch' && inputs.sign
+    if: github.event_name == 'workflow_dispatch'
     environment: macos-signing
     runs-on: macos-15
     timeout-minutes: 60
