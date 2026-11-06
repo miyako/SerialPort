@@ -6,6 +6,6 @@
   "cli": "serial-port",
   "language": "cpp",
   "feature": "Asynchronous multiplexed binary serial communication using standalone Asio",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "feature_class": "SerialPort"
 }

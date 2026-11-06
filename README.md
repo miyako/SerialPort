@@ -7,7 +7,7 @@ No 4D plug-in SDK or host plug-in installation is involved.
 
 Repository/component/project/package identity: **SerialPort**. Independent
 namespace: **Serial**. Public class: **SerialPort**. Executable:
-**serial-port**, version **0.1.1**. Source compatibilityVersion is 2060;
+**serial-port**, version **0.1.2**. Source compatibilityVersion is 2060;
 the inherited available test runtime is free **tool4d 20.7 LTS/build 101905**
 on macOS ARM64. This prototype targets that runtime, not a promise of support
 on every earlier release. macOS CLI deployment target is 11+, subject to the

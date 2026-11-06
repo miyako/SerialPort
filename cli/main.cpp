@@ -530,7 +530,7 @@ int run(const std::vector<std::string>& args) {
         for (auto& arg : args) J(arg).dump(-1, ' ', true);
         if (args == std::vector<std::string>{"serve"}) return Server().run();
         J result;
-        if (args == std::vector<std::string>{"--version"}) result = J{{"protocol", 1}, {"version", "0.1.1"}};
+        if (args == std::vector<std::string>{"--version"}) result = J{{"protocol", 1}, {"version", "0.1.2"}};
         else if (args == std::vector<std::string>{"list"}) result = J{{"protocol", 1}, {"ports", ports()}};
         else if (args.size() == 3 && args[0] == "echo" && args[1] == "--text")
             result = J{{"protocol", 1}, {"text", args[2]}};

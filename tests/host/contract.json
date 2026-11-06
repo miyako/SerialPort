@@ -89,7 +89,7 @@
       },
       {
         "path": "/version/stdout",
-        "equals": "{\"protocol\":1,\"version\":\"0.1.1\"}\n"
+        "equals": "{\"protocol\":1,\"version\":\"0.1.2\"}\n"
       },
       {
         "path": "/version/stderr",
@@ -103,7 +103,7 @@
         "path": "/version/value",
         "equals": {
           "protocol": 1,
-          "version": "0.1.1"
+          "version": "0.1.2"
         }
       },
       {
@@ -255,7 +255,7 @@
         "path": "/renamedExecutable",
         "equals": {
           "ok": true,
-          "stdout": "{\"protocol\":1,\"version\":\"0.1.1\"}\n",
+          "stdout": "{\"protocol\":1,\"version\":\"0.1.2\"}\n",
           "stderr": "",
           "exitCode": 0
         }
