@@ -20,6 +20,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 
 from build_cli import smoke_test
@@ -103,6 +104,25 @@ def safe_path(path):
     return path
 
 
+def stapler_failure(arguments, result):
+    operation = arguments[2]
+    category = {
+        64: "usage_syntax", 65: "invalid_ticket_data",
+        66: "missing_input_or_invalid_ticket",
+        68: "ticket_unavailable_or_unexpected_service_response",
+        73: "ticket_write_failed", 77: "ticket_revoked",
+    }.get(result.returncode, "unknown")
+    diagnostic = {"program": "stapler", "operation": operation, "category": category,
+                  "exit_code": result.returncode}
+    for stream in ("stdout", "stderr"):
+        text = getattr(result, stream)
+        diagnostic[stream + "_sha256"] = hashlib.sha256(
+            (text if isinstance(text, str) else "").encode("utf-8")).hexdigest()
+    return SigningError("stapler exited with status " + str(result.returncode) +
+                        " (operation=" + operation + "; category=" + category + ")",
+                        diagnostic=diagnostic)
+
+
 def run(arguments, *, timeout=120):
     """Never expose argv, captured output or an original subprocess exception."""
     label = Path(arguments[0]).name
@@ -117,6 +137,9 @@ def run(arguments, *, timeout=120):
     if result.returncode:
         if label == "codesign":
             raise codesign_failure(arguments, result) from None
+        if label == "xcrun" and arguments[1:3] in (
+                ["stapler", "staple"], ["stapler", "validate"]):
+            raise stapler_failure(arguments, result) from None
         raise SigningError(label + " exited with status " + str(result.returncode)) from None
     return result
 
@@ -526,14 +549,35 @@ def sign_dmg(dmg, chain, identity, team):
     return {"before_sha256": before, "signed_sha256": sha256(dmg), "signature": signature}
 
 
+def run_stapler(operation, dmg, *, timeout):
+    for attempt in range(1, 4):
+        try:
+            run(["/usr/bin/xcrun", "stapler", operation, "-v", dmg], timeout=timeout)
+            return
+        except SigningError as error:
+            diagnostic = error.diagnostic
+            if (not diagnostic or diagnostic.get("program") != "stapler"
+                    or diagnostic.get("exit_code") != 68):
+                raise
+            if attempt == 3:
+                raise SigningError(str(error) + " after 3 attempts",
+                                   diagnostic={**diagnostic, "attempts": attempt}) from None
+            delay = 0 if attempt == 1 else 30
+            print("stapler " + operation + " returned status 68; retrying in " +
+                  str(delay) + " seconds (attempt " + str(attempt + 1) + "/3)",
+                  file=sys.stderr)
+            if delay:
+                time.sleep(delay)
+
+
 def staple_dmg(dmg):
     dmg = safe_path(dmg)
-    run(["/usr/bin/xcrun", "stapler", "staple", dmg], timeout=300)
+    run_stapler("staple", dmg, timeout=300)
 
 
 def verify_dmg(dmg, team):
     signature = verify_dmg_signature(dmg, team)
-    run(["/usr/bin/xcrun", "stapler", "validate", dmg], timeout=120)
+    run_stapler("validate", dmg, timeout=120)
     run(["/usr/sbin/spctl", "--assess", "--type", "open", "--context",
          "context:primary-signature", dmg], timeout=120)
     return {**signature, "stapled_ticket": True, "gatekeeper_assessment": True}

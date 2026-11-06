@@ -530,6 +530,79 @@ class SigningTests(unittest.TestCase):
         self.assertTrue(any("context:primary-signature" in command for command in commands))
         self.assertTrue(all(command[-1] == dmg for command in commands))
 
+    def test_stapler_failure_diagnostics_never_expose_output_or_path(self):
+        private = "PRIVATE-NOTARY-OUTPUT"
+        for operation in ("staple", "validate"):
+            result = subprocess.CompletedProcess([], 68, private, private)
+            with patch.object(signing.subprocess, "run", return_value=result):
+                with self.assertRaises(signing.SigningError) as error:
+                    signing.run(["/usr/bin/xcrun", "stapler", operation, "-v",
+                                 self.root / private])
+            diagnostic = error.exception.diagnostic
+            self.assertEqual(diagnostic["program"], "stapler")
+            self.assertEqual(diagnostic["operation"], operation)
+            self.assertEqual(diagnostic["exit_code"], 68)
+            self.assertRegex(diagnostic["stdout_sha256"], r"^[a-f0-9]{64}$")
+            self.assertRegex(diagnostic["stderr_sha256"], r"^[a-f0-9]{64}$")
+            self.assertNotIn(private, str(error.exception) + json.dumps(diagnostic))
+
+    def test_stapler_retries_only_service_error_with_bounded_delays(self):
+        for operation, action, timeout in (
+                ("staple", lambda dmg: signing.staple_dmg(dmg), 300),
+                ("validate", lambda dmg: signing.verify_dmg(dmg, "TESTTEAM01"), 120)):
+            dmg = self.root / "SerialPort.dmg"
+            failure = signing.stapler_failure(
+                ["xcrun", "stapler", operation],
+                subprocess.CompletedProcess([], 68, "", "PRIVATE"))
+            with patch.object(signing, "verify_dmg_signature", return_value={}), patch.object(
+                    signing, "run", side_effect=[failure, failure, completed(), completed()]) as mock, patch.object(
+                    signing.time, "sleep") as sleep, patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                action(dmg)
+            commands = [call.args[0] for call in mock.call_args_list]
+            self.assertEqual(commands[:3], [
+                ["/usr/bin/xcrun", "stapler", operation, "-v", dmg]] * 3)
+            self.assertTrue(all(call.kwargs["timeout"] == timeout for call in mock.call_args_list[:3]))
+            sleep.assert_called_once_with(30)
+            self.assertIn("attempt 3/3", stderr.getvalue())
+            self.assertNotIn("PRIVATE", stderr.getvalue())
+            if operation == "validate":
+                self.assertEqual(commands[3][0], "/usr/sbin/spctl")
+
+    def test_stapler_exhaustion_preserves_failed_gate_and_diagnostic(self):
+        failure = signing.stapler_failure(
+            ["xcrun", "stapler", "validate"],
+            subprocess.CompletedProcess([], 68, "", "PRIVATE"))
+        report = {"steps": {}}
+        output = self.root / "report.json"
+        with patch.object(signing, "verify_dmg_signature", return_value={}), patch.object(
+                signing, "run", side_effect=failure) as mock, patch.object(
+                signing.time, "sleep"), patch("sys.stderr", new_callable=io.StringIO):
+            with self.assertRaisesRegex(signing.SigningError, "after 3 attempts"):
+                signing.step(report, output, "dmg_verify",
+                             lambda: signing.verify_dmg(self.root / "SerialPort.dmg", "TESTTEAM01"))
+        self.assertEqual(mock.call_count, 3)
+        saved = json.loads(output.read_text())["steps"]["dmg_verify"]
+        self.assertEqual(saved["status"], "failed")
+        self.assertEqual(saved["failure"]["attempts"], 3)
+        self.assertEqual(saved["failure"]["operation"], "validate")
+        self.assertNotIn("PRIVATE", output.read_text())
+
+    def test_stapler_does_not_retry_invalid_revoked_unknown_or_execution_errors(self):
+        failures = [
+            signing.stapler_failure(["xcrun", "stapler", "validate"],
+                                   subprocess.CompletedProcess([], code, "", "PRIVATE"))
+            for code in (64, 65, 66, 73, 77, 1)
+        ] + [signing.SigningError("xcrun execution failed")]
+        for failure in failures:
+            with self.subTest(failure=str(failure)), patch.object(
+                    signing, "verify_dmg_signature", return_value={}), patch.object(
+                    signing, "run", side_effect=failure) as mock, patch.object(
+                    signing.time, "sleep") as sleep:
+                with self.assertRaises(signing.SigningError):
+                    signing.verify_dmg(self.root / "SerialPort.dmg", "TESTTEAM01")
+                mock.assert_called_once()
+                sleep.assert_not_called()
+
     def test_dmg_mount_is_readonly_detaches_and_checks_top_level(self):
         commands = []
         def response(arguments, **kwargs):

@@ -331,6 +331,13 @@ stapleable. Use the DMG for a ticket-bearing container; the ZIP's bare-code tick
 lookup can require network access. No signature, notarization or quarantine
 checks are bypassed.
 
+Stapling and ticket validation retry only stapler status **68** (ticket
+unavailable or unexpected ticket-service response), at most three attempts:
+one immediate retry, then one after 30 seconds. Exhaustion, invalid/revoked
+tickets and other errors still fail closed. Signing diagnostics identify the
+stapler operation, exit code and output hashes without exposing raw tool output
+or credentials; status 68 alone does not establish a transient network cause.
+
 After signature, notarization and compiled-host checks pass, CI uploads and
 downloads a candidate, verifies the exact returned ZIP/DMG bytes and signatures,
 and repeats real compiled-host acceptance. Only then is
