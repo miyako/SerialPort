@@ -63,6 +63,11 @@ class ReleaseRefTests(unittest.TestCase):
         self.git("tag", tag)
         self.assertEqual(self.resolve(version_tag=tag)["sha"], self.sha)
 
+    def test_prefix_free_tags_are_supported_without_rewriting_legacy_tags(self):
+        self.git("tag", "0.1.0")
+        self.assertEqual(release_ref.verify(self.root, "0.1.0", self.sha), self.sha)
+        self.assertEqual(release_ref.verify(self.root, "v0.1.0", self.sha), self.sha)
+
     def test_malformed_and_arbitrary_refs_rejected_before_git(self):
         for tag in ("", "main", "refs/tags/v0.1.0", "v01.2.3", "v1.2",
                     "v1.2.3-01", "v1.2.3\nsha=evil", "v1.2.3^{commit}",
@@ -142,12 +147,75 @@ class ReleaseRefTests(unittest.TestCase):
     def test_existing_configuration_validator_checks_version(self):
         config = ci_config.load_config(ROOT)
         self.assertEqual(ci_config.load_config(ROOT, tag="v" + config["version"]), config)
+        self.assertEqual(ci_config.load_config(ROOT, tag=config["version"]), config)
         with self.assertRaisesRegex(ValueError, "template.json version"):
             ci_config.load_config(ROOT, tag="v999999.0.0")
 
-    def test_workflows_pin_every_post_gate_checkout_and_package_tag(self):
+    def test_publish_requires_manual_main(self):
+        release_ref.require_main({"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main"})
+        for event, ref in (("push", "refs/heads/main"), ("pull_request", "refs/heads/main"),
+                           ("workflow_dispatch", "refs/heads/feature"), ("workflow_dispatch", "refs/tags/1.0.0")):
+            with self.subTest(event=event, ref=ref), self.assertRaisesRegex(ValueError, "main"):
+                release_ref.require_main({"GITHUB_EVENT_NAME": event, "GITHUB_REF": ref})
+
+    def test_only_explicit_api_404_establishes_availability(self):
+        absent = subprocess.CompletedProcess([], 1, stdout="HTTP/2.0 404 Not Found\n", stderr="")
+        with patch.object(release_ref, "load_config"), patch.object(
+                release_ref.subprocess, "run", return_value=absent) as run:
+            release_ref.available(self.root, "miyako/SerialPort", "0.1.0")
+            self.assertEqual(run.call_count, 2)
+            self.assertEqual([call.args[0][-1] for call in run.call_args_list], [
+                "repos/miyako/SerialPort/git/ref/tags/0.1.0",
+                "repos/miyako/SerialPort/releases/tags/0.1.0"])
+        for code, text in ((0, "HTTP/2.0 200 OK\n"), (1, "HTTP/2.0 403 Forbidden\n"),
+                           (1, "HTTP/2.0 500 Failed\n"), (1, "network failure"),
+                           (0, "HTTP/2.0 404 Not Found\n")):
+            result = subprocess.CompletedProcess([], code, stdout=text, stderr="details")
+            with self.subTest(code=code, text=text), patch.object(release_ref, "load_config"), patch.object(
+                    release_ref.subprocess, "run", return_value=result), self.assertRaises(ValueError):
+                release_ref.available(self.root, "miyako/SerialPort", "0.1.0")
+
+    def test_new_tags_cannot_use_legacy_prefix_or_invalid_repository(self):
+        for repository, tag in (("miyako/SerialPort", "v0.1.0"), ("../SerialPort", "0.1.0"),
+                                ("miyako/SerialPort", "main")):
+            with self.subTest(repository=repository, tag=tag), patch.object(
+                    release_ref.subprocess, "run") as run, self.assertRaises(ValueError):
+                release_ref.available(self.root, repository, tag)
+            run.assert_not_called()
+
+    def test_tag_creation_checks_main_ancestry_then_uses_atomic_nonforced_api(self):
+        env = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main"}
+        remote = subprocess.CompletedProcess([], 0, stdout=self.sha + "\trefs/tags/0.1.0\n", stderr="")
+        with patch.dict(os.environ, env), patch.object(release_ref, "available") as available, patch.object(
+                release_ref, "verify") as verify, patch.object(
+                release_ref.subprocess, "run", return_value=remote) as run:
+            release_ref.create_tag(self.root, "miyako/SerialPort", "0.1.0", self.sha)
+            available.assert_called_once_with(self.root, "miyako/SerialPort", "0.1.0")
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertIn(["git", "merge-base", "--is-ancestor", self.sha, "refs/remotes/origin/main"], commands)
+            self.assertEqual(commands[2], ["gh", "api", "--method", "POST",
+                                          "repos/miyako/SerialPort/git/refs", "-f",
+                                          "ref=refs/tags/0.1.0", "-f", "sha=" + self.sha])
+            self.assertFalse(any("--force" in command for command in commands))
+            verify.assert_called_once_with(self.root, "0.1.0", self.sha)
+
+    def test_tag_creation_cannot_bypass_main_or_failed_ancestry(self):
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push"}), patch.object(
+                release_ref.subprocess, "run") as run, self.assertRaises(ValueError):
+            release_ref.create_tag(self.root, "miyako/SerialPort", "0.1.0", self.sha)
+        run.assert_not_called()
+        env = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main"}
+        with patch.dict(os.environ, env), patch.object(release_ref, "available"), patch.object(
+                release_ref.subprocess, "run", side_effect=[
+                    subprocess.CompletedProcess([], 0),
+                    subprocess.CalledProcessError(1, ["git", "merge-base"]),
+                ]) as run, self.assertRaises(subprocess.CalledProcessError):
+            release_ref.create_tag(self.root, "miyako/SerialPort", "0.1.0", self.sha)
+        self.assertEqual(run.call_count, 2)
+
+    def test_workflows_pin_every_checkout_and_have_no_tag_entry_or_tag_push(self):
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        release = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
         self.assertEqual(ci.count("uses: actions/checkout@v4"), 5)
         self.assertEqual(ci.count("ref: ${{ inputs.source_sha || github.sha }}"), 5)
         self.assertEqual(ci.count("&& !inputs.release_call"), 4)
@@ -156,12 +224,24 @@ class ReleaseRefTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", release)
         self.assertIn("source_sha: ${{ needs.gate.outputs.source_sha }}", release)
         self.assertIn("release_call: true", release)
-        self.assertEqual(release.count("ref: ${{ needs.gate.outputs.source_sha }}"), 2)
-        self.assertEqual(release.count('validate --release --tag "$RELEASE_TAG"'), 2)
-        self.assertIn('package_component.py --tag "$RELEASE_TAG" --unpack-test', release)
-        self.assertLess(release.index("release_ref.py verify"), release.index("gh release create"))
-        self.assertIn('git fetch --force --no-tags origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"', release)
-        self.assertIn("--verify-tag", release)
+        self.assertEqual(release.count("ref: ${{ needs.gate.outputs.source_sha }}"), 1)
+        self.assertIn("name: Publish", release)
+        self.assertIn("options: [patch, minor, major]", release)
+        self.assertIn("default: patch", release)
+        self.assertIn("cancel-in-progress: false", release)
+        self.assertIn("secrets: inherit", release)
+        self.assertNotIn("version_tag", release)
+        self.assertNotIn("  push:", release)
+        self.assertIn('bump_release.py next --mode "$BUMP_MODE"', release)
+        self.assertIn('bump_release.py apply --version "$NEXT_VERSION" --stage', release)
+        self.assertIn("needs: [gate, accepted]", release)
+        self.assertIn("name: SerialPort-macOS-signed-notarized", release)
+        verify = release.index("name: Verify the exact downloaded signed assets")
+        publish = release.index("name: Create the accepted tag")
+        self.assertLess(verify, publish)
+        self.assertNotIn("--publish", release[verify:publish])
+        self.assertIn("--publish --create-tag", release[publish:])
+        self.assertNotIn("--publish", release[:verify])
 
 
 if __name__ == "__main__":

@@ -499,29 +499,38 @@ failed status/phase reports. This is a starter identity/wiring regression,
 `--tag` validates package/version identity; it does not create/push/publish a tag.
 For approved hosted publication only, set Actions **variable**
 `FOURD_ENABLED=true`; `TOOL4D_URL` / `TOOL4D_SHA256` are optional paired overrides
-of the approved public `package.json.tool` pin, not required secrets. Push the matching
-`v<version>` tag. Release jobs build same-tag native resources, compile after
-assembly and host-test the unpacked package before publishing `<repository>.zip`.
-Only publication receives built-in `GITHUB_TOKEN` write permission; no personal
-token/version-bot commit is required.
+of the approved public `package.json.tool` pin, not required secrets. Configure
+the six Apple secrets described in README. Publish builds all native resources,
+signs native code, compiles and host-tests the actual signed ZIP and stapled DMG,
+including an upload/download round trip. Only version preparation and final
+publication receive built-in `GITHUB_TOKEN` write permission; no personal token
+is required and branch protection is not bypassed.
 
-### Manual Actions dispatch and existing-tag release
+### Simple manual CI and automatic-version Publish
 
 After the dispatch-capable workflow is merged to the **default branch**, open
-**Actions → CI → Run workflow** and select a branch for ordinary validation.
-`FOURD_ENABLED` still controls optional hosted 4D steps; CLI-only green is not
-compiled-host green.
+**Actions → CI → Run workflow** and select a reviewed branch. No inputs or tag
+entry are required. Manual CI always requires signed/notarized macOS package
+acceptance; it never commits, tags or publishes. Push/PR CI remains
+credential-free; `FOURD_ENABLED` controls its optional unsigned 4D checks.
 
-**Actions → Release compiled component → Run workflow** requires
-`version_tag`, an **already existing** `v<SemVer>` tag matching the initialized
-repository's `template.json.version` / `package.json.version`. It creates no
-tag. The gate resolves/peels that tag to a commit SHA, validates source at that
-SHA, and all reusable native CI, assembly, compilation and publication jobs use
-that exact SHA—not the selected UI branch. Packaging receives the normalized
-tag explicitly. Publication refreshes and verifies the tag has not moved, uses
-`--verify-tag`, and remains blocked by compilation or final host failure.
+Following Overlay, **Actions → Publish → Run workflow** on **main** has only
+`mode`: `patch` (default), `minor` or `major`. It derives a prefix-free `X.Y.Z`
+version/tag from numeric tag history (legacy `vX.Y.Z` tags are read-only
+baselines), or the configured version if no tags exist. The bounded version
+helper validates all version surfaces before writing/staging them. A normal
+non-forced bot commit precedes all builds; every native/signing/host job checks
+out that exact SHA. A tag collision, denied main push or missing signing
+credential fails closed.
+
+Publish reuses the mandatory signed CI path and its exact downloaded-package
+gates. The final job downloads accepted assets and native manifests again,
+validates provenance, host evidence and hashes, then atomically creates the
+accepted tag and uses `--verify-tag` to publish a **prototype prerelease**, never
+automatically Latest. There is no unsigned fallback or stable-release claim.
+Signing does not turn untested hardware/Windows 4D into passed checks.
 Do not manually dispatch publication or create a tag without user permission.
-The new workflow is not available in the default template before its PR merges.
+The new workflow is not available in the Actions UI before its PR merges.
 
 ## 7. Report evidence, not assumptions
 
@@ -547,7 +556,8 @@ Summarize revision/input digest, language, tool versions/platform, exact command
 artifact/report paths and unvalidated checks. Never describe an Apple Silicon
 local package as fully cross-platform accepted. Partial acceptance is **NOT
 release ready**; publication requires all mandatory gates. Optional unsigned
-signing status alone is not a blocker for this unsigned pipeline.
+signing status alone is not a blocker for unsigned local acceptance; the
+separate Publish workflow always requires signed/notarized macOS artifacts.
 Report the **actual** compiler used: Go **1.25.1** was available in the local
 November 1 observation, whereas **1.26.10** is the CI pin and the source minimum
 is 1.23. Do not relabel a local 1.25.1 build as a 1.26.10 build.
@@ -588,9 +598,11 @@ For a requested local implementation, finish the feature, replace every
 greeting-specific surface, run exact feature/error tests, validate licenses and
 resources, compile fresh, and load the **exact final ZIP's** unpacked component.
 Report unsupported/unavailable checks as `not_run`; local success remains
-`release_ready:false`. Approved publication additionally requires the existing
-matching tag, all required native artifact/tests, hosted 4D opt-in and the final
-package-host gate. Signing is optional for the existing unsigned release.
+`release_ready:false`. Approved prototype publication additionally requires the main-only version
+commit, all required native artifacts/tests, hosted 4D opt-in, mandatory macOS
+signing/notarization and the final downloaded-package host gates. Only then is
+its tag created. Signing remains optional for unsigned local acceptance, not
+for Publish; prototype prereleases still report `release_ready:false`.
 
 The final handoff must identify the repository/namespace/class/CLI/language,
 revision and input provenance, exact commands/results, tool versions, stable ZIP
@@ -655,7 +667,7 @@ notarization `Accepted`, clean temporary keychains even on failure and test the
 final signed compiled package. Bare CLI executables cannot be stapled; a signed
 container/Apple `Contents/` layout requires deliberate packaging changes.
 
-### Seven Apple secrets: registration is not implementation
+### Six Apple secrets: manual CI and Publish
 
 SerialPort now has an explicitly approved **manual macOS signing path in
 `ci.yml`**, documented in README. It uses the first **six** credentials below
@@ -670,13 +682,15 @@ The release workflow below remains unsigned; registering secrets alone does
 not activate signing, and normal push/PR runs must never receive them.
 Real signing/notarization stays `not_run` until a credentialed run succeeds.
 
-The current `.github/workflows/release.yml` is **unsigned** and consumes **none**
-of these seven secrets. Merely registering them does **not** enable signing or
-notarization. Implementing a signing workflow is separate, explicitly approved
-scope; this playbook documents credential types, not an implemented integration.
-No secret below is required by the free local compiler or unsigned acceptance.
+The explicitly approved `.github/workflows/ci.yml` signing jobs consume these
+six secrets only on manual events, including reuse by main-only Publish.
+Registering names alone is not signing evidence: the actual signature,
+notarization, stapling and downloaded-package host gates must pass. See README
+for the existing **user-run** Keychain provisioner; agents must not run it or
+retrieve/upload credential values. No secret below is required by the free
+local compiler or unsigned acceptance.
 
-For a future approved integration, register private values in the **destination**
+Register private values in the **destination**
 repository under **Settings → Secrets and variables → Actions → Secrets → New
 repository secret**. Template creation does not inherit repository secrets or
 variables. Never place certificates/private keys/passwords in source, workflow
@@ -690,7 +704,10 @@ YAML, logs, package metadata or a PR.
 | `NOTARYTOOL_APPLE_ID` | The Apple account **email address** authorized to notarize for the Developer team. |
 | `NOTARYTOOL_TEAM_ID` | The Apple Developer **Team ID** for the signing identity and notarization account. |
 | `NOTARYTOOL_PASSWORD` | An Apple **app-specific password** for notarization, **not the normal Apple account login password**. |
-| `CODESIGN_APPLE_ID` | Despite the misleading name, the full **Developer ID Application signing identity**, such as `Developer ID Application: Organization (TEAMID)`, or its certificate **SHA-1 identity fingerprint**. **Not an email address.** |
+
+No `CODESIGN_APPLE_ID` secret is required. Signing derives exactly one valid
+Developer ID Application identity for the configured team from the newly
+imported isolated keychain; missing, incompatible or ambiguous identities fail.
 
 Keep public compiler pins/hosted opt-in under package metadata and Actions
 **Variables**, not Secrets. GitHub supplies the restricted publish job's

@@ -1,0 +1,119 @@
+name: Publish
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Version increment (no tag entry needed)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      source_sha: ${{ steps.revision.outputs.sha }}
+      release_tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require an explicit manual Publish on main
+        run: python -c "import sys; sys.path.insert(0, 'scripts'); from release_ref import require_main; require_main()"
+      - name: Fetch complete version history without creating tags
+        run: git fetch --tags origin
+      - name: Plan the next version from published tag history
+        id: next
+        env:
+          BUMP_MODE: ${{ inputs.mode }}
+        run: python scripts/bump_release.py next --mode "$BUMP_MODE"
+      - name: Update and stage only validated version surfaces
+        env:
+          NEXT_VERSION: ${{ steps.next.outputs.version }}
+        run: python scripts/bump_release.py apply --version "$NEXT_VERSION" --stage
+      - name: Validate release configuration and the version-bumped source
+        env:
+          FOURD_ENABLED: ${{ vars.FOURD_ENABLED }}
+          RELEASE_TAG: ${{ steps.next.outputs.tag }}
+          TEST_CLI_LANGUAGE: none
+        run: |
+          python scripts/ci_config.py validate --release --tag "$RELEASE_TAG"
+          python -m unittest discover -s tests -v
+      - name: Fail closed if the planned tag or release already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.next.outputs.tag }}
+        run: python scripts/release_ref.py available --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG"
+      - name: Commit the bounded version update without creating a tag
+        id: revision
+        env:
+          RELEASE_TAG: ${{ steps.next.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "Bump version to $RELEASE_TAG" -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
+            git push origin HEAD:refs/heads/main
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  accepted:
+    needs: gate
+    uses: ./.github/workflows/ci.yml
+    with:
+      source_sha: ${{ needs.gate.outputs.source_sha }}
+      release_call: true
+    secrets: inherit
+
+  publish:
+    needs: [gate, accepted]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.source_sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-x64
+          path: build/macos-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-arm64
+          path: build/macos-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-windows-x64
+          path: build/windows-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: SerialPort-macOS-signed-notarized
+          path: dist
+      - name: Verify the exact downloaded signed assets before any tag creation
+        env:
+          RELEASE_TAG: ${{ needs.gate.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.gate.outputs.source_sha }}
+        run: python scripts/release_assets.py --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"
+      - name: Create the accepted tag and publish a prototype prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.gate.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.gate.outputs.source_sha }}
+        run: python scripts/release_assets.py --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --sha "$RELEASE_SHA" --publish --create-tag
